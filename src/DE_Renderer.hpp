@@ -7,6 +7,10 @@
 namespace de {
 	class Device;
 	class RenderPass;
+	class Buffer;
+	class CommandPool;
+	class DescriptorPool;
+	class DescriptorSetLayout;
 
 	struct gpuImage {
 		vk::UniqueImage image;
@@ -42,7 +46,7 @@ namespace de {
 		const de::Device& device,
 		const vk::Format& depthFormat,
 		const vk::Extent2D& extent,
-		vk::ImageUsageFlags additionalUsages = {}, // <-- сюда можно добавить eSampled и т.д.
+		vk::ImageUsageFlags additionalUsages = {}, 
 		vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1,
 		uint32_t arrayLayers = 1);
 
@@ -58,19 +62,21 @@ namespace de {
 		const vk::Extent2D& extent,
 		const vk::RenderPass& renderPass);
 
+	struct FrameData
+	{
+		std::uint32_t swapchainImageIndex;
+		std::uint32_t inFlightIndex;
+
+		const vk::UniqueFramebuffer& framebuffer;
+		const vk::UniqueFence& inFlightFence;
+		const vk::UniqueSemaphore& readyForRenderingSemaphore;
+		const vk::UniqueSemaphore& readyForPresentingSemaphore;
+		const vk::CommandBuffer& commandBuffer;
+		const vk::DescriptorSet& descriptor ;
+	};
+
 	class Swapchain {
 	public:
-
-		struct FrameData
-		{
-			std::uint32_t swapchainImageIndex;
-			std::uint32_t inFlightIndex;
-
-			const vk::UniqueFramebuffer& framebuffer;
-			const vk::UniqueFence& inFlightFence;
-			const vk::UniqueSemaphore& readyForRenderingSemaphore;
-			const vk::UniqueSemaphore& readyForPresentingSemaphore;
-		};
 
 		class Builder {
 		public:
@@ -105,6 +111,7 @@ namespace de {
 		private:
 			const Device& device_;
 			const RenderPass& renderPass_;
+			std::vector<CommandBuffer> commandBuffers;
 			vk::SurfaceKHR surface_;
 			vk::SurfaceFormatKHR surfaceFormat_;
 			vk::Extent2D extent_;
@@ -127,7 +134,8 @@ namespace de {
 		Swapchain& operator=(Swapchain&&) = default;
 
 		const vk::UniqueSwapchainKHR& getSwapchain() const noexcept { return swapchain_; }
-
+		void createFrameResources(const CommandPool& cmdPool);
+		void createFrameDescriptorSets(const DescriptorPool& descriptorPool, const DescriptorSetLayout& layout, const std::vector<std::unique_ptr<Buffer>>& buffers);
 		FrameData getNextFrame();
 
 	private:
@@ -137,6 +145,8 @@ namespace de {
 		const RenderPass& renderPass_;
 		vk::UniqueSwapchainKHR swapchain_;
 
+		std::unique_ptr<CommandBuffer> frameCommandBuffer_;
+		std::vector<vk::DescriptorSet> frameDescriptorSets_;
 
 		std::uint32_t maxImagesInFlight_;
 		std::uint32_t currentFrameIndex_ = 0;

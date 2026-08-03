@@ -162,12 +162,16 @@ namespace de{
                 return *this;
             }
 
+            Builder& setDynamicStates(const std::vector<vk::DynamicState>& dynamicStates) {
+                dynamicState
+                    .setDynamicStates(dynamicStates);
+                return *this;
+            }
+
             Builder& addPushConstantRange(vk::PushConstantRange range) noexcept {
                 pushConstantRanges_.push_back(range);
                 return *this;
             }
-
-
 
            const std::vector<vk::PipelineShaderStageCreateInfo>& getStageInfos()const noexcept          {return stageInfos_;}
            const vk::PipelineVertexInputStateCreateInfo*         getInputStateInfo() const noexcept     {return &inputStateCreateInfo_;}
@@ -180,6 +184,9 @@ namespace de{
            const std::vector<vk::DescriptorSetLayout>&           getDsLayouts() const noexcept          {return dsLayouts_; }
            const std::vector<vk::PushConstantRange>&             getPushConstantRanges() const noexcept {return pushConstantRanges_; }
            const vk::PipelineDepthStencilStateCreateInfo*        getDepthInfo() const noexcept          {return &detphState_;}
+           const vk::PipelineDynamicStateCreateInfo*             getDynamicState() const noexcept       { return &dynamicState; }
+           
+
         private:
             std::vector<vk::PipelineShaderStageCreateInfo> stageInfos_;
             //vertex input
@@ -191,6 +198,7 @@ namespace de{
             vk::PipelineColorBlendStateCreateInfo    colorBlendState_{};
             vk::PipelineDepthStencilStateCreateInfo  detphState_{};
             vk::RenderPass                           renderPass_;
+            vk::PipelineDynamicStateCreateInfo       dynamicState{};
 
             vk::Viewport viewport_{};
             vk::Rect2D scissors_{};
@@ -212,8 +220,11 @@ namespace de{
                 .setPRasterizationState(builder.getRasterezationInfo())
                 .setPMultisampleState(builder.getMultisampleInfo())
                 .setRenderPass(builder.getRenderPass())
+                .setPDynamicState(builder.getDynamicState())
                 .setPColorBlendState(builder.getColorBlendInfo())
                 .setPDepthStencilState(builder.getDepthInfo());
+
+      
 
 
             auto [result, pipeline] = device.createGraphicsPipelineUnique(vk::PipelineCache{}, graphicsPipelineInfo);

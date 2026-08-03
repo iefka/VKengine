@@ -1,363 +1,297 @@
-#define GLM_FORCE_DEFAUT_ALIGNED_GENTYPES
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#define GLM_FORCE_RADIANS
 
-//std
-#include<iostream>
-#include<algorithm>
-#include<memory>
-#include<utility>
-#include<vector>
-#include<limits>
-#include<glm/glm.hpp>
-#include<glm/ext.hpp>
-
-//de
-#include"DE_Application.hpp"
-#include"DE_Memory.hpp"
-#include"Utility/DE_Debug.hpp"
-#include"DE_Shaders.hpp"
-#include"DE_Pipeline.hpp"
-#include"DE_Descriptors.hpp"
-#include"DE_CommandBuffers.hpp"
-#include"DE_Window.hpp"
-#include"DE_RenderPass.hpp"
-#include"DE_Renderer.hpp"
-#include"Utility/DE_Utility.hpp"
+#include "DE_Application.hpp"
+#include "DE_Memory.hpp"
+#include "DE_Shaders.hpp"
+#include "DE_Pipeline.hpp"
+#include "DE_RenderPass.hpp"
+#include "DE_Renderer.hpp"
+#include "DE_CommandBuffers.hpp"
+#include "DE_PushConstants.hpp"
+#include "Utility/DE_Debug.hpp"
+#include "Utility/DE_Utility.hpp"
 
 
+#include <array>
+#include <stdexcept>
 
-	static std::vector<const char*> getGlfwRequiredExtensions() {
-		std::vector<const char*> result;
 
-		uint32_t extCount;
-		const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&extCount);
+// ============================================================================
+// AppTimer Implementation
+// ============================================================================
 
-		for (uint32_t it{}; it < extCount; ++it) {
-			result.emplace_back(glfwExtensions[it]);
-		}
+struct GlobalUBO {
+	glm::mat4 projectionView{ 1.f };
+	glm::vec3 lightDirection = glm::normalize(glm::vec3(1.f, 3.f, 2.f));
+};
 
-		return result;
+AppTimer::AppTimer() { reset(); }
+
+void AppTimer::reset() {
+	startTime_ = std::chrono::steady_clock::now();
+	lastFrameTime_ = startTime_;
+	totalTime_ = 0.0f;
+	deltaTime_ = 0.0f;
+}
+
+float AppTimer::getDeltaTime() {
+	auto currentTime = std::chrono::steady_clock::now();
+	deltaTime_ = std::chrono::duration<float>(currentTime - lastFrameTime_).count();
+	totalTime_ = std::chrono::duration<float>(currentTime - startTime_).count();
+	lastFrameTime_ = currentTime;
+	return deltaTime_;
+}
+
+float AppTimer::getTotalTime() const { return totalTime_; }
+
+// ============================================================================
+// Application Implementation
+// ============================================================================
+
+Application::Application(const ApplicationConfig& config)
+	: config_(config), window_(config.windowWidth, config.windowHeight, config.windowTitle) {
+	initVulkan();
+	initResources();
+}
+
+Application::~Application() {}
+
+
+void Application::initVulkan() {
+	auto extensions = getRequiredExtensions();
+	std::vector<const char*> layers{};
+
+	instance_ = std::make_unique<de::Instance>(
+		config_.applicationName,
+		config_.applicationVersion,
+		config_.engineName,
+		config_.engineVersion,
+		extensions,
+		layers
+	);
+
+	window_.createSurface(*instance_);
+
+	std::vector<const char*> deviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+	device_ = std::make_unique<de::Device>(*instance_, *window_.getSurface(), deviceExtensions);
+
+	window_.requestWindowFormat(*device_);
+	surfaceFormat_ = window_.getSurfaceFormats()[0];
+}
+
+void Application::initResources() {
+	
+	initDescriptorSets();
+	initGameObjects();
+	initRenderPass();
+	initRenderSystem();
+	initCommandPool();
+	initSwapchain();
+
+
+}
+
+void Application::initDescriptorSets() {
+
+	globalPool_ = std::make_unique<de::DescriptorPool>(
+		de::DescriptorPool::Builder(*device_)
+		.setMaxSets(config_.swapchainImageCount)
+		.addPoolSize(vk::DescriptorType::eUniformBuffer, config_.swapchainImageCount)
+		.build()
+	);
+
+	de::MemoryUsageInfo uboBufferInfo{
+		sizeof(GlobalUBO),
+		1,
+		0,
+		vk::BufferUsageFlagBits::eUniformBuffer,
+		vk::MemoryPropertyFlagBits::eHostVisible
+	};
+	for (size_t i = 0; i < config_.swapchainImageCount; ++i){
+		uboBuffers_.push_back(
+			std::make_unique<de::Buffer>(*device_, uboBufferInfo)
+		);
+		uboBuffers_[i]->map();
 	}
-		
-	Application::Application() :
-	window_(800,600,"MyEngine") {
+	
+	descriptorLayouts_.push_back(de::DescriptorSetLayout::Builder{ *device_ }
+		.addBinding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eVertex)
+		.build()
+	);
 
-		std::vector<const char*> extensions = getGlfwRequiredExtensions();
-		std::vector<const char*> layers{};
-		std::vector<const char*> deviceExtensions{ VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+}
 
-		instance_ = std::make_unique<de::Instance>("Dimasik",1,"none",1, extensions, layers);
-		window_.createSurface(*instance_);
-		device_ = std::make_unique<de::Device>(*instance_, *window_.getSurface(), deviceExtensions);
-		window_.requestWindowFormat(*device_);
+void Application::initGameObjects() {
 
+	controlledCamera_ = std::make_unique<de::ControlledCamera>(window_);
+	std::unique_ptr<de::Model> smoothVaseModel = de::Model::createModelFromFile(*device_,"../Models/smooth_vase.obj");
+	auto smoothVase = de::GameObject::createGameObject();
+	smoothVase.model = std::move(smoothVaseModel);
+	smoothVase.transform.rotation.x = glm::radians(180.f);
+	smoothVase.transform.translation = { .0f, .0f, 0.f };
+	smoothVase.transform.scale = glm::vec3(3.f);
+	gameObjects.push_back(std::move(smoothVase));
+
+	std::unique_ptr<de::Model> cubeModel = de::Model::createModelFromFile(*device_, "../Models/cube.obj");
+	auto cube = de::GameObject::createGameObject();
+	cube.model = std::move(cubeModel);
+	cube.transform.rotation.x = glm::radians(180.f);
+	cube.transform.scale = { 0.2f,0.2f,0.2f };
+	cube.transform.translation = { 1.f, .0f, 0.f };
+	gameObjects.push_back(std::move(cube));
+
+}
+
+void Application::initRenderSystem(){
+	renderSystem_ = std::make_unique<de::RenderSystem>(
+		de::RenderSystem(*device_, *renderPass_, window_.getExtent(),descriptorLayouts_)
+	);
+}
+
+void Application::initRenderPass() {
+	renderPass_ = std::make_unique<de::RenderPass>(
+		de::RenderPass::Builder{*device_}
+		.setColorAttachment(surfaceFormat_.format)
+		.setDepthAttachment(vk::Format::eD32Sfloat)
+		.build()
+	);
+}
+
+
+void Application::initSwapchain() {
+	swapchain_ = std::make_unique<de::Swapchain>(
+		de::Swapchain::Builder{*device_, *renderPass_}
+		.setSurface(*window_.getSurface())
+		.setImageFormatAndColorSpace(surfaceFormat_)
+		.setImageExtent(window_.getExtent())
+		.setMinImageCount(config_.swapchainImageCount)
+		.build()
+	);
+	swapchain_->createFrameResources(*commandPool_);
+	swapchain_->createFrameDescriptorSets(*globalPool_, descriptorLayouts_[0], uboBuffers_);
+}
+
+void Application::initCommandPool () {
+	const auto& graphicsQueue = device_->getGraphicsQueue();
+	commandPool_ = std::make_unique<de::CommandPool>(*device_, graphicsQueue.queuFamilyIndex, vk::CommandPoolCreateFlagBits::eResetCommandBuffer);
+}
+
+std::vector<const char*> Application::getRequiredExtensions() {
+	std::vector<const char*> extensions;
+	uint32_t extCount;
+	const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&extCount);
+	for (uint32_t i = 0; i < extCount; ++i) extensions.push_back(glfwExtensions[i]);
+	return extensions;
+}
+
+std::pair<vk::Viewport, vk::Rect2D> getViewportState(const vk::Extent2D& viewportExtent) {
+
+	auto viewport = vk::Viewport{}
+		.setX(0.f)
+		.setY(0.f)
+		.setWidth(static_cast<float>(viewportExtent.width))
+		.setHeight(static_cast<float>(viewportExtent.height))
+		.setMinDepth(0.f)
+		.setMaxDepth(1.f);
+
+	auto scissors = vk::Rect2D{ {0,0},viewportExtent };
+
+	return std::pair<vk::Viewport, vk::Rect2D>(viewport, scissors);
+};
+
+void Application::recordCommandBuffer(const de::FrameData& frameData) {
+	auto clearValues = std::array<vk::ClearValue, 2>{
+		vk::ClearValue{}.setColor(std::array<float, 4>{{0.0f, 0.0f, 0.0f, 1.0f}}), 
+		vk::ClearValue{}.setDepthStencil(vk::ClearDepthStencilValue{1.0f, 0})};
+
+	auto renderPassBeginInfo = vk::RenderPassBeginInfo{}
+		.setRenderPass(*renderPass_->getRenderPass())
+		.setFramebuffer(*frameData.framebuffer)
+		.setRenderArea(vk::Rect2D{vk::Offset2D{0, 0}, window_.getExtent()})
+		.setClearValues(clearValues);
+
+	auto beginInfo = vk::CommandBufferBeginInfo{};
+
+	frameData.commandBuffer.begin(beginInfo);
+	frameData.commandBuffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
+	auto [viewport, scissors] = getViewportState(window_.getExtent());
+
+	frameData.commandBuffer.setViewport(0, viewport);
+	frameData.commandBuffer.setScissor(0, scissors);
+	renderSystem_->renderGameObjects(frameData.commandBuffer, gameObjects, controlledCamera_->getCamera(),frameData.descriptor);
+
+	frameData.commandBuffer.endRenderPass();
+	frameData.commandBuffer.end();
+}
+
+void Application::handleWindowResize() {
+	if (!window_.isResized()) return;
+	if (window_.isMinimized()) return;
+	device_->getLogicalDevice().waitIdle();
+	recreateSwapchain();
+	window_.endResize();
+}
+
+void Application::recreateSwapchain() { swapchain_.reset(); initSwapchain(); }
+
+void Application::renderFrame() {
+	auto frame = swapchain_->getNextFrame();
+
+	const auto& camera = controlledCamera_->getCamera();
+	const auto extent = window_.getExtent();
+	auto aspectRaito = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+	GlobalUBO ubo{};
+	ubo.projectionView = camera.getProjectionMatrix(aspectRaito) * camera.getViewMatrix();
+
+
+	uboBuffers_[frame.inFlightIndex]->copyToBuffer(&ubo,sizeof(GlobalUBO),0);
+	uboBuffers_[frame.inFlightIndex]->flush();
+
+	recordCommandBuffer(frame);
+
+	const vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
+
+	auto submitInfo = vk::SubmitInfo{}.setCommandBuffers(frame.commandBuffer)
+		.setPWaitDstStageMask(waitStages)
+		.setWaitSemaphores(*frame.readyForRenderingSemaphore)
+		.setSignalSemaphores(*frame.readyForPresentingSemaphore);
+
+	device_->getGraphicsQueue().queue.submit(submitInfo, *frame.inFlightFence);
+
+	auto presentInfo = vk::PresentInfoKHR{}
+		.setSwapchains(*swapchain_->getSwapchain())
+		.setImageIndices(frame.swapchainImageIndex)
+		.setWaitSemaphores(*frame.readyForPresentingSemaphore);
+
+	auto result = device_->getPresentQueue().queue.presentKHR(presentInfo);
+	if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR) throw std::runtime_error("Presentation failed");
+}
+
+void Application::mainLoop() {
+	while (!window_.shouldClose()) {
+		glfwPollEvents();
+		handleWindowResize();
+		float deltaTime = timer_.getDeltaTime();
+		handleInputs(deltaTime);
+		updateScene(deltaTime);
+		renderFrame();
 	}
+	cleanup();
+}
 
-	static void waitIdle(const de::Device& device) {
-		device.getLogicalDevice().waitIdle();
-	}
+void Application::cleanup() { if (device_) device_->getLogicalDevice().waitIdle(); }
 
-	static vk::UniqueSemaphore createSemaphore(const de::Device& device) {
-		const auto& logicalDevice = device.getLogicalDevice();
+void Application::run() { 
+	timer_.reset(); 
+	mainLoop(); 
+}
 
-		const auto semaphoreInfo = vk::SemaphoreCreateInfo{};
+void Application::handleInputs(float deltaTime) {
+	
+	controlledCamera_->handleInputs(deltaTime, GLFW_KEY_C);
+}
 
-
-		return logicalDevice.createSemaphoreUnique(semaphoreInfo);
-	}
-
-	static uint32_t aquireNextImageIndex(const de::Device& device, const de::Swapchain& swapchain,uint64_t timeout, vk::Semaphore& semaphore) {
-		const auto& logicalDevice = device.getLogicalDevice();
-
-		return logicalDevice.acquireNextImageKHR(*swapchain.getSwapchain(), timeout, semaphore).value;
-	}
-
-
-	static de::GraphicsPipeline createPipeline(const de::Device& device, 
-		const de::Window& window, 
-		const de::RenderPass& renderPass, 
-		const de::Shader& fragmentShader, 
-		const de::Shader& vertexShader,
-		const std::vector<vk::Format>& vertexFormats) {
-
-		const auto multisampleInfo = vk::PipelineMultisampleStateCreateInfo{};
-
-		std::vector<vk::VertexInputAttributeDescription> vertexAttributes{};
-		uint32_t offset{ 0 };
-		for (uint32_t it{ 0 }; it < vertexFormats.size(); ++it) {
-			vertexAttributes.push_back(vk::VertexInputAttributeDescription{}
-				.setBinding(0)
-				.setLocation(it)
-				.setFormat(vertexFormats[it])
-				.setOffset(offset)
-			);
-			offset += de::utl::getVertexFormatSize(vertexFormats[it]);
-		}
-		
-
-		const auto bindingDescription = vk::VertexInputBindingDescription{}
-			.setBinding(0)
-			.setInputRate(vk::VertexInputRate::eVertex)
-			.setStride(offset);
-		
-
-		const auto vertexInputState = vk::PipelineVertexInputStateCreateInfo{}
-			.setVertexAttributeDescriptions(vertexAttributes)
-			.setVertexBindingDescriptions(bindingDescription);
-
-		const auto rasterizationState = vk::PipelineRasterizationStateCreateInfo{}
-			.setDepthClampEnable(false)
-			.setRasterizerDiscardEnable(false)
-			.setPolygonMode(vk::PolygonMode::eFill)
-			.setLineWidth(1.f);
-
-		const auto colorBlendAttachment = vk::PipelineColorBlendAttachmentState{}
-			.setBlendEnable(false)
-			.setColorWriteMask(
-				vk::ColorComponentFlagBits::eR |
-				vk::ColorComponentFlagBits::eG |
-				vk::ColorComponentFlagBits::eB |
-				vk::ColorComponentFlagBits::eA);
-		const auto colorBlendState = vk::PipelineColorBlendStateCreateInfo{}
-		.setAttachments(colorBlendAttachment);
-
-		const auto depthStencil = vk::PipelineDepthStencilStateCreateInfo{}
-			.setDepthTestEnable(true)
-			.setDepthWriteEnable(true)
-			.setDepthCompareOp(vk::CompareOp::eLess)
-			.setDepthBoundsTestEnable(false)
-			.setStencilTestEnable(true);
-
-		const auto builder = de::GraphicsBuilder()
-			.addFragmentShader("main", fragmentShader.getShaderModule())
-			.addVertexShader("main", vertexShader.getShaderModule())
-			.setRenderPass(*renderPass.getRenderPass())
-			.setInputAssemblyState(vk::PrimitiveTopology::eTriangleList)
-			.setViewportState(window.getExtent())
-			.setRasterizationState(rasterizationState)
-			.setMultisampleState(multisampleInfo)
-			.setVertexInputState(vertexInputState)
-			.setColorBlendState(colorBlendState)
-			.setDepthStencilState(depthStencil)
-			.setVertexInputState(vertexInputState);
-
-		return de::GraphicsPipeline(device, builder);
-	}
-
-
-	static void recordCommandBuffer(const de::RenderPass& renderPass,
-		const vk::UniqueFramebuffer& frameBuffer,
-		const vk::Extent2D& renderExtent,
-		const vk::CommandBuffer& commandBuffer,
-		const de::GraphicsPipeline& graphicsPipeline,
-		const de::Buffer& vertexBuffer,
-		const uint32_t vertexCount) {
-
-		const auto clearValue = std::array<vk::ClearValue, 2>{
-			vk::ClearValue{}.setColor(std::array<float,4>{{0.f,0.f,0.5f,1.f}}),
-			vk::ClearValue{}.setDepthStencil(vk::ClearDepthStencilValue{1.f,0})
-		};
-
-		const auto renderPassBeginInfo = vk::RenderPassBeginInfo{}
-			.setRenderPass(*renderPass.getRenderPass())
-			.setFramebuffer(*frameBuffer)
-			.setRenderArea(vk::Rect2D{ vk::Offset2D{0,0},renderExtent })
-			.setClearValues(clearValue);
-
-		const auto beginInfo = vk::CommandBufferBeginInfo{};
-
-		commandBuffer.begin(beginInfo);
-		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline.getPipeline());
-		commandBuffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
-		commandBuffer.bindVertexBuffers(0, *vertexBuffer.getBuffer(), {0} );
-		commandBuffer.draw(vertexCount, 1, 0, 0);
-		commandBuffer.endRenderPass();
-		commandBuffer.end();
-
-	}
-
-	void Application::run() {
-
-		constexpr size_t vertexCount = 36;
-		const std::array< glm::vec4, 2 * vertexCount > vertices = {
-			// front                            (red)
-			glm::vec4{ -.5f, -.5f, .5f, 1.f },  glm::vec4{ 1.f, 0.f, 0.f, 1.f },
-			glm::vec4{ .5f, -.5f, .5f, 1.f },   glm::vec4{ 1.f, 0.f, 0.f, 1.f },
-			glm::vec4{ -.5f, .5f, .5f, 1.f },   glm::vec4{ 1.f, 0.f, 0.f, 1.f },
-			glm::vec4{ .5f, -.5f, .5f, 1.f },   glm::vec4{ 1.f, 0.f, 0.f, 1.f },
-			glm::vec4{ .5f, .5f, .5f, 1.f },    glm::vec4{ 1.f, 0.f, 0.f, 1.f },
-			glm::vec4{ -.5f, .5f, .5f, 1.f },   glm::vec4{ 1.f, 0.f, 0.f, 1.f },
-
-			// back                             (yellow)
-			glm::vec4{ -.5f, -.5f, -.5f, 1.f }, glm::vec4{ 1.f, 1.f, 0.f, 1.f },
-			glm::vec4{ .5f, -.5f, -.5f, 1.f },  glm::vec4{ 1.f, 1.f, 0.f, 1.f },
-			glm::vec4{ -.5f, .5f, -.5f, 1.f },  glm::vec4{ 1.f, 1.f, 0.f, 1.f },
-			glm::vec4{ .5f, -.5f, -.5f, 1.f },  glm::vec4{ 1.f, 1.f, 0.f, 1.f },
-			glm::vec4{ .5f, .5f, -.5f, 1.f },   glm::vec4{ 1.f, 1.f, 0.f, 1.f },
-			glm::vec4{ -.5f, .5f, -.5f, 1.f },  glm::vec4{ 1.f, 1.f, 0.f, 1.f },
-
-			// left                             (violet)
-			glm::vec4{ -.5f, -.5f, .5f, 1.f },  glm::vec4{ 1.f, 0.f, 1.f, 1.f },
-			glm::vec4{ -.5f, -.5f, -.5f, 1.f }, glm::vec4{ 1.f, 0.f, 1.f, 1.f },
-			glm::vec4{ -.5f, .5f, -.5f, 1.f },  glm::vec4{ 1.f, 0.f, 1.f, 1.f },
-			glm::vec4{ -.5f, -.5f, .5f, 1.f },  glm::vec4{ 1.f, 0.f, 1.f, 1.f },
-			glm::vec4{ -.5f, .5f, -.5f, 1.f },  glm::vec4{ 1.f, 0.f, 1.f, 1.f },
-			glm::vec4{ -.5f, .5f, .5f, 1.f },   glm::vec4{ 1.f, 0.f, 1.f, 1.f },
-
-			// right                            (green)
-			glm::vec4{ .5f, -.5f, .5f, 1.f },   glm::vec4{ 0.f, 1.f, 0.f, 1.f },
-			glm::vec4{ .5f, -.5f, -.5f, 1.f },  glm::vec4{ 0.f, 1.f, 0.f, 1.f },
-			glm::vec4{ .5f, .5f, -.5f, 1.f },   glm::vec4{ 0.f, 1.f, 0.f, 1.f },
-			glm::vec4{ .5f, -.5f, .5f, 1.f },   glm::vec4{ 0.f, 1.f, 0.f, 1.f },
-			glm::vec4{ .5f, .5f, -.5f, 1.f },   glm::vec4{ 0.f, 1.f, 0.f, 1.f },
-			glm::vec4{ .5f, .5f, .5f, 1.f },    glm::vec4{ 0.f, 1.f, 0.f, 1.f },
-
-			// top                              (turquoise)
-			glm::vec4{ -.5f, -.5f, .5f, 1.f },  glm::vec4{ 0.f, 1.f, 1.f, 1.f },
-			glm::vec4{ .5f, -.5f, .5f, 1.f },   glm::vec4{ 0.f, 1.f, 1.f, 1.f },
-			glm::vec4{ .5f, -.5f, -.5f, 1.f },  glm::vec4{ 0.f, 1.f, 1.f, 1.f },
-			glm::vec4{ -.5f, -.5f, .5f, 1.f },  glm::vec4{ 0.f, 1.f, 1.f, 1.f },
-			glm::vec4{ .5f, -.5f, -.5f, 1.f },  glm::vec4{ 0.f, 1.f, 1.f, 1.f },
-			glm::vec4{ -.5f, -.5f, -.5f, 1.f }, glm::vec4{ 0.f, 1.f, 1.f, 1.f },
-
-			// bottom                           (blue)
-			glm::vec4{ -.5f, .5f, .5f, 1.f },   glm::vec4{ 0.f, 0.f, 1.f, 1.f },
-			glm::vec4{ .5f, .5f, .5f, 1.f },    glm::vec4{ 0.f, 0.f, 1.f, 1.f },
-			glm::vec4{ .5f, .5f, -.5f, 1.f },   glm::vec4{ 0.f, 0.f, 1.f, 1.f },
-			glm::vec4{ -.5f, .5f, .5f, 1.f },   glm::vec4{ 0.f, 0.f, 1.f, 1.f },
-			glm::vec4{ .5f, .5f, -.5f, 1.f },   glm::vec4{ 0.f, 0.f, 1.f, 1.f },
-			glm::vec4{ -.5f, .5f, -.5f, 1.f },  glm::vec4{ 0.f, 0.f, 1.f, 1.f },
-		};
-
-		const auto vertexFormats = std::vector< vk::Format  >{
-			vk::Format::eR32G32B32A32Sfloat,
-			vk::Format::eR32G32B32A32Sfloat,
-		};
-
-		de::MemoryUsageInfo vertexBufferInfo{
-			sizeof(vertices),
-			0,
-			vk::BufferUsageFlagBits::eVertexBuffer
-		};
-		de::Buffer vertexBuffer(*device_, vertexBufferInfo);		
-
-		const auto& graphicsQueue = device_->getGraphicsQueue();
-		const auto& presentQueue = device_->getPresentQueue();
-
-		constexpr uint32_t requestedSwapchainImageCount = 2u;
-
-		de::Shader vertexShader(*device_, "Shaders/bin/vertex.spv");
-		de::Shader fragmentShader(*device_, "Shaders/bin/fragment.spv");
-		
-		const auto& colorFormats = window_.getSurfaceFormats();
-
-		 auto RenderPass = de::RenderPass::Builder{ *device_ }
-			.setColorAttachment(colorFormats[0].format)
-			.setDepthAttachment(vk::Format::eD32Sfloat)
-			.build();
-
-		
-		 auto graphicsPipeline = createPipeline(*device_, window_, RenderPass,
-			 fragmentShader, vertexShader,vertexFormats);
-		
-
-		 std::unique_ptr<de::Swapchain> Swapchain = std::make_unique<de::Swapchain>(de::Swapchain::Builder{ *device_, RenderPass }
-			 .setSurface(*window_.getSurface())
-			 .setImageFormatAndColorSpace(colorFormats[0])
-			 .setImageExtent(window_.getExtent())
-			 .setMinImageCount(requestedSwapchainImageCount)
-			 .build());
-
-
-		 de::CommandPool commandPool(*device_, graphicsQueue.queuFamilyIndex, vk::CommandPoolCreateFlagBits::eResetCommandBuffer);
-		 auto commandBuffer = commandPool.allocate(vk::CommandBufferLevel::ePrimary, requestedSwapchainImageCount);
-
-		 glm::mat4 model{ 1 };
-		 glm::mat4 view{ 1 };
-		 glm::mat4 projection{ 1 };
-		 float rotationAngle = 0.f;
-
-		 auto verticesTemp = vertices;
-		while (!window_.shouldClose()) {
-			glfwPollEvents();
-
-			if (window_.isResized()) {
-
-				if (window_.isMinimized()) {
-					continue;
-				}
-
-
-				const auto& logicalDevice = device_->getLogicalDevice();
-
-				logicalDevice.waitIdle();
-
-				graphicsPipeline = createPipeline(*device_, window_, RenderPass,
-					fragmentShader, vertexShader,vertexFormats);
-
-				Swapchain.reset();
-
-				Swapchain = std::make_unique<de::Swapchain>(de::Swapchain::Builder{ *device_, RenderPass }
-					.setSurface(*window_.getSurface())
-					.setImageFormatAndColorSpace(colorFormats[0])
-					.setImageExtent(window_.getExtent())
-					.setMinImageCount(requestedSwapchainImageCount)
-					.build());
-
-				window_.endResize();
-			}
-			
-			view = glm::translate(glm::mat4{ 1 }, glm::vec3{ 0.f,0.f,-3.f });
-
-			projection = glm::perspective(
-				glm::radians(30.0f),
-				window_.getExtent().width / (float)window_.getExtent().height,
-				0.1f,
-				10.0f);
-
-			model = glm::rotate(glm::mat4{ 1 }, rotationAngle, glm::vec3{ 0.f,1.f,0.f });
-			for (size_t i = 0; i < vertexCount; ++i) {
-				verticesTemp[2 * i] = projection * view * model * vertices[2 * i];
-			}
-			vertexBuffer.copyToBuffer(verticesTemp);
-			rotationAngle += 0.01f;
-
-			const auto frame = Swapchain->getNextFrame();
-
-			recordCommandBuffer(
-				RenderPass,
-				frame.framebuffer,
-				window_.getExtent(),
-				commandBuffer.handle(frame.inFlightIndex),
-				graphicsPipeline,
-				vertexBuffer,
-				vertexCount);
-
-			const vk::PipelineStageFlags waitStages[] = {
-				vk::PipelineStageFlagBits::eColorAttachmentOutput };
-
-			const auto submitInfo = vk::SubmitInfo{}
-				.setCommandBuffers(commandBuffer.handle(frame.inFlightIndex))
-				.setPWaitDstStageMask(waitStages)
-				.setWaitSemaphores(*frame.readyForRenderingSemaphore)
-				.setSignalSemaphores(*frame.readyForPresentingSemaphore);
-				graphicsQueue.queue.submit(submitInfo,*frame.inFlightFence);
-				
-			const auto presentInfo = vk::PresentInfoKHR{}
-					.setSwapchains(*Swapchain->getSwapchain())
-					.setImageIndices(frame.swapchainImageIndex)
-					.setWaitSemaphores(*frame.readyForPresentingSemaphore);
-			const auto result = presentQueue.queue.presentKHR(presentInfo);
-
-			if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR) {
-				throw std::runtime_error("presentation failed");
-			}
-
-
-		
-		}
-		waitIdle(*device_);
-	}
-
-	 
+void Application::updateScene(float deltaTime) {
+	float speed = 1.0f; // радиан в секунду
+	gameObjects[0].transform.rotation.y += speed * deltaTime;
+	controlledCamera_->updateCamera(deltaTime);
+}

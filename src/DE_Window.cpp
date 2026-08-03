@@ -12,7 +12,7 @@ namespace de {
 	:glfwWindow_{ initAndCreateWindow(width,height,windowTitle)}, width_{width}, height_{height} {
 		glfwSetWindowUserPointer(glfwWindow_.get(), this);
 		glfwSetFramebufferSizeCallback(glfwWindow_.get(), frameBufferResizeCallback);
-
+		glfwSetInputMode(glfwWindow_.get(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 	}
 
 	Window::~Window(){

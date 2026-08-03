@@ -32,6 +32,7 @@ namespace de {
 			return glfwWindowShouldClose(glfwWindow_.get());
 		}
 		
+		GLFWwindow* getGlfwWindow() { return glfwWindow_.get(); }
 
 		void createSurface(const Instance& instance);
 		//requset formats from device and store into class

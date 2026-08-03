@@ -30,7 +30,7 @@ namespace de{
 			.setApplicationVersion(applicationVersion)
 			.setPEngineName(engineName)
 			.setEngineVersion(engineVersion)
-			.setApiVersion(vk::makeApiVersion(0,1,3,0));
+			.setApiVersion(vk::makeApiVersion(0,1,4,0));
 			
 		
 		const auto instanceInfo = vk::InstanceCreateInfo{}

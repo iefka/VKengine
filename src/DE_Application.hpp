@@ -1,22 +1,107 @@
 #ifndef _DE_APPLICATION_
 #define _DE_APPLICATION_
+    
 
-#include"DE_Instance.hpp"
-#include"DE_Device.hpp"
-#include"DE_Window.hpp"
-
-	class Application{
-	public:
-		Application();
-		~Application() = default;
-
-		void run();
-	private:
-
-		std::unique_ptr<de::Instance> instance_;
-		std::unique_ptr<de::Device> device_;
-		de::Window window_;
-	};
+#include "DE_Instance.hpp"
+#include "DE_Device.hpp"
+#include "DE_Window.hpp"
+#include "DE_Memory.hpp"
+#include "DE_RenderPass.hpp"
+#include "DE_Renderer.hpp"
+#include "DE_RenderSystem.hpp"
+#include "DE_CommandBuffers.hpp"
+#include "DE_Descriptors.hpp"
+#include "DE_ControledCamera.hpp"
+#include"DE_GameObject.hpp"
+#include "Utility/DE_Debug.hpp"
+#include "Utility/DE_Utility.hpp"
+#include"glm_config.hpp"
 
 
-#endif 
+
+#include <vector>
+#include <memory>
+#include <chrono>
+
+
+class AppTimer {
+public:
+	AppTimer();
+	void reset();
+	float getDeltaTime();
+	float getTotalTime() const;
+private:
+	std::chrono::steady_clock::time_point startTime_;
+	std::chrono::steady_clock::time_point lastFrameTime_;
+	float totalTime_{0.0f};
+	float deltaTime_{0.0f};
+};
+
+struct ApplicationConfig {
+	int windowWidth = 800;
+	int windowHeight = 600;
+	const char* windowTitle = "MyEngine";
+	uint32_t swapchainImageCount = 2;
+
+	// Vulkan metadata
+	const char* applicationName = "Dimasik";
+	uint32_t applicationVersion = 1;
+	const char* engineName = "none";
+	uint32_t engineVersion = 1;
+};
+
+class Application {
+public:
+	Application(const ApplicationConfig& config = ApplicationConfig());
+	~Application();
+
+	void run();
+
+private:
+	// init
+	void initVulkan();
+	void initResources();
+	void initGameObjects();
+	void initRenderSystem();
+	void initRenderPass();
+	void initSwapchain();
+	void initCommandPool();
+	void initDescriptorSets();
+
+	// helpers
+	std::vector<const char*> getRequiredExtensions();
+	void recordCommandBuffer(const de::FrameData& frameData);
+	void updateScene(float deltaTime);
+	void handleWindowResize();
+	void recreateSwapchain();
+	void renderFrame();
+	void handleInputs(float deltaTime);
+	void mainLoop();
+	void cleanup();
+
+private:
+	ApplicationConfig config_;
+	std::unique_ptr<de::Instance> instance_;
+	std::unique_ptr<de::Device> device_;
+	de::Window window_;
+	
+
+	// resources
+	std::unique_ptr<de::DescriptorPool> globalPool_;
+	std::vector<de::DescriptorSetLayout> descriptorLayouts_;
+	std::vector<de::GameObject> gameObjects;
+	std::vector<std::unique_ptr<de::Buffer>> uboBuffers_;
+
+	std::unique_ptr<de::RenderPass> renderPass_;
+	std::unique_ptr<de::RenderSystem> renderSystem_;
+	std::unique_ptr<de::CommandPool> commandPool_;
+	std::unique_ptr<de::Swapchain> swapchain_;
+	std::unique_ptr<de::ControlledCamera> controlledCamera_;
+
+	AppTimer timer_;
+
+	vk::SurfaceFormatKHR surfaceFormat_{};
+
+};
+
+#endif // _DE_APPLICATION_

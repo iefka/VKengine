@@ -4,6 +4,7 @@
 
 
 #include<vulkan/vulkan.hpp>
+#include <functional>
 namespace de {
 	namespace utl {
 
@@ -12,6 +13,8 @@ namespace de {
 			{
 			case vk::Format::eR32G32B32A32Sfloat:
 				return static_cast<uint32_t> (4 * sizeof(float));
+			case vk::Format::eR32G32B32Sfloat:
+				return static_cast<uint32_t> (3 * sizeof(float));
 
 			default:
 				throw std::invalid_argument("unsuported vertex format");
@@ -28,6 +31,12 @@ namespace de {
 				}
 			}
 			throw std::runtime_error("No suitable memory type found");
+		}
+
+		template <typename T, typename... Rest>
+		inline void hashCombine(std::size_t& seed, const T& v, const Rest&... rest) {
+			seed ^= std::hash<T>{}(v)+0x9e3779b9 + (seed << 6) + (seed >> 2);
+			(hashCombine(seed, rest), ...);
 		}
 
 	}

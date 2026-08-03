@@ -71,7 +71,7 @@ namespace de{
 		DescriptorPool(DescriptorPool&&) = default;
 		DescriptorPool& operator=(DescriptorPool&&) = default;
 
-		vk::UniqueDescriptorSet allocate(const DescriptorSetLayout& descriptorSetLayout) const;
+		vk::DescriptorSet allocate(const DescriptorSetLayout& descriptorSetLayout) const;
 
 
 	private:
@@ -87,10 +87,10 @@ namespace de{
 		DescriptorWriter(const Device& device,const DescriptorPool& descriptorPool, const DescriptorSetLayout& descriptorLayout)
 			:pool_(descriptorPool), layout_(descriptorLayout), device_(device) {}
 		
-		DescriptorWriter& writeBuffer(uint32_t binding, const std::vector <vk::DescriptorBufferInfo>& imageInfo);
-		DescriptorWriter& writeImage(uint32_t binding, const std::vector <vk::DescriptorImageInfo>& imageInfo);
-		vk::UniqueDescriptorSet build();
-		void overwrite(const vk::UniqueDescriptorSet& set);
+		DescriptorWriter& writeBuffer(uint32_t binding, vk::DescriptorBufferInfo* bufferInfo);
+		DescriptorWriter& writeImage(uint32_t binding, vk::DescriptorImageInfo* imageInfo);
+		vk::DescriptorSet build();
+		void overwrite(const vk::DescriptorSet& set);
 
 	private:
 		const Device& device_;

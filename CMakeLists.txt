@@ -57,7 +57,6 @@ add_executable(vulkan_tutorial
 if(GLSLC_EXECUTABLE)
     add_custom_target(compile_shaders ALL
         COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/src/Shaders/bin"
-        COMMAND ${GLSLC_EXECUTABLE} "${CMAKE_SOURCE_DIR}/src/Shaders/compute.comp" -o "${CMAKE_SOURCE_DIR}/src/Shaders/bin/compute.spv"
         COMMAND ${GLSLC_EXECUTABLE} "${CMAKE_SOURCE_DIR}/src/Shaders/vertex.vert"   -o "${CMAKE_SOURCE_DIR}/src/Shaders/bin/vertex.spv"
         COMMAND ${GLSLC_EXECUTABLE} "${CMAKE_SOURCE_DIR}/src/Shaders/fragment.frag" -o "${CMAKE_SOURCE_DIR}/src/Shaders/bin/fragment.spv"
         COMMENT "Compiling shaders..."

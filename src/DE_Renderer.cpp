@@ -2,6 +2,9 @@
 #include<limits>
 //de
 #include "DE_Device.hpp"
+#include"DE_Memory.hpp"
+#include"DE_Descriptors.hpp"
+#include"DE_CommandBuffers.hpp"
 #include"DE_RenderPass.hpp"
 #include "DE_Renderer.hpp"
 #include"Utility/DE_Utility.hpp"
@@ -54,6 +57,7 @@ namespace de {
 		return *this;
 	}
 
+
 	Swapchain Swapchain::Builder::build() {
 
 		const auto createInfo = vk::SwapchainCreateInfoKHR{}
@@ -102,7 +106,27 @@ namespace de {
 		}
 	}
 
-	Swapchain::FrameData Swapchain::getNextFrame()
+	void Swapchain::createFrameResources(const CommandPool& cmdPool){
+				
+		frameCommandBuffer_ = std::make_unique<CommandBuffer>(
+			cmdPool.allocate(vk::CommandBufferLevel::ePrimary, maxImagesInFlight_)
+		);
+	}
+
+	//creating descripror sets for each frame
+	void Swapchain::createFrameDescriptorSets(const DescriptorPool& descriptorPool, const DescriptorSetLayout& layout,const std::vector<std::unique_ptr<Buffer>>& buffers) {
+		
+		
+		frameDescriptorSets_.resize(maxImagesInFlight_);
+		for (size_t i = 0; i < frameDescriptorSets_.size(); i++) {
+			auto bufferInfo = buffers[i]->getDescriptorInfo();
+			frameDescriptorSets_[i] = de::DescriptorWriter(device_, descriptorPool, layout)
+				.writeBuffer(0, &bufferInfo)
+				.build();
+		}
+	}
+
+	FrameData Swapchain::getNextFrame()
 	{
 		const auto& logicalDevice = device_.getLogicalDevice();
 
@@ -118,13 +142,16 @@ namespace de {
 
 		
 
-		const auto frame = FrameData{
+		 auto frame = FrameData{
 			imageIndex,
 			currentFrameIndex_,
 			framebuffers_[currentFrameIndex_],
 			inFlightFences_[currentFrameIndex_],
 			readyForRenderingSemaphores_[currentFrameIndex_],
-			readyForPresentingSemaphores_[imageIndex]
+			readyForPresentingSemaphores_[imageIndex],
+			frameCommandBuffer_->handle(currentFrameIndex_),
+			frameDescriptorSets_[currentFrameIndex_]
+
 
 		};
 		currentFrameIndex_ = ++currentFrameIndex_ % maxImagesInFlight_;

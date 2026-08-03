@@ -24,7 +24,7 @@ namespace de {
 	public:
 		CommandPool(const Device& device, uint32_t queueFamilyIndex, vk::CommandPoolCreateFlagBits flags = {});
 
-		CommandBuffer allocate(vk::CommandBufferLevel bufferLevel, uint32_t bufferCount = 1);
+		CommandBuffer allocate(vk::CommandBufferLevel bufferLevel, uint32_t bufferCount = 1) const;
 
 	private:
 

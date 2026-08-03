@@ -17,7 +17,10 @@ struct QueueFamily{
 
 namespace de{
 
+	class CommandBuffer;
+	class CommandPool;
 	class Instance;
+
 	class Device{
 	public:
 
@@ -31,6 +34,11 @@ namespace de{
 		Device(Device&&) = default;
 		Device& operator=(Device&&) = default;
 
+		void CopyBuffer(
+			const vk::Buffer& srcBuffer,
+			const vk::Buffer& dstBuffer,
+			vk::DeviceSize size) const;
+
 		const vk::PhysicalDevice& getPhysicalDevice() const noexcept{ return physicalDevice_; }
 		const vk::Device& getLogicalDevice() const noexcept{ return *uLogicalDevice_; }
 		const QueueFamily getGraphicsQueue() const noexcept { return queues_[0]; }
@@ -38,11 +46,15 @@ namespace de{
 
 	private:
 
+		CommandBuffer beginSingleCommand() const;
+		void endSingleCommand(const vk::CommandBuffer& commandBuffer) const;
+
 		const Instance& instance_;
 		vk::PhysicalDevice physicalDevice_;
 		vk::UniqueDevice uLogicalDevice_;
 		std::vector<QueueFamily> queues_;
 
+		std::unique_ptr<CommandPool> transientCommandPool_;
 		const std::vector<const char*> extensions_;
 		const std::vector<const char*> layers_;
 

@@ -47,15 +47,16 @@ namespace de{
 
 	}
 
-	vk::UniqueDescriptorSet DescriptorPool::allocate(const DescriptorSetLayout& descriptorSetLayout) const {
+	vk::DescriptorSet DescriptorPool::allocate(const DescriptorSetLayout& descriptorSetLayout) const {
 
 		const auto& logicalDevice = device_.getLogicalDevice();
 		
 		const auto descriptorAllocInfo = vk::DescriptorSetAllocateInfo{}
 			.setDescriptorPool(*descriptorPool_)
+			.setDescriptorSetCount(1)
 			.setSetLayouts(descriptorSetLayout.getLayout());
 
-		 auto sets = logicalDevice.allocateDescriptorSetsUnique(descriptorAllocInfo);
+		 auto sets = logicalDevice.allocateDescriptorSets(descriptorAllocInfo);
 		  return std::move(sets[0]);
 	}
 
@@ -111,15 +112,15 @@ namespace de{
 
 			descriptorSetLayout_ = logicalDevice.createDescriptorSetLayoutUnique(descriptorLayoutInfo);
 		}
-		void DescriptorWriter::overwrite(const vk::UniqueDescriptorSet& set){
+		void DescriptorWriter::overwrite(const vk::DescriptorSet& set){
 			const auto& logicalDevice = device_.getLogicalDevice();
 			for (auto&& write : writes_) {
-				write.setDstSet(*set);
+				write.setDstSet(set);
 			}
 			logicalDevice.updateDescriptorSets(writes_,{});
 		}
 
-		DescriptorWriter& DescriptorWriter::writeBuffer(uint32_t binding, const std::vector<vk::DescriptorBufferInfo>& bufferInfo){
+		DescriptorWriter& DescriptorWriter::writeBuffer(uint32_t binding, vk::DescriptorBufferInfo* bufferInfo){
 
 			const auto& bindingList = layout_.getBinding();
 
@@ -131,15 +132,16 @@ namespace de{
 
 			const auto write = vk::WriteDescriptorSet{}
 				.setDstBinding(binding)
+				.setDescriptorCount(1)
 				.setDescriptorType(it->second.descriptorType)
-				.setBufferInfo(bufferInfo);
+				.setPBufferInfo(bufferInfo);
 
 			writes_.push_back(write);
 
 			return *this;
 		}
 
-		DescriptorWriter& DescriptorWriter::writeImage(uint32_t binding, const std::vector <vk::DescriptorImageInfo>& imageInfo){
+		DescriptorWriter& DescriptorWriter::writeImage(uint32_t binding, vk::DescriptorImageInfo* imageInfo){
 			const auto& bindingList = layout_.getBinding();
 
 			auto it = bindingList.find(binding);
@@ -150,19 +152,20 @@ namespace de{
 
 			const auto write = vk::WriteDescriptorSet {}
 				.setDstBinding(binding)
+				.setDescriptorCount(1)
 				.setDescriptorType(it->second.descriptorType)
-				.setImageInfo(imageInfo);
+				.setPImageInfo(imageInfo);
 
 			writes_.push_back(write);
 
 			return *this;
 		}
 
-		vk::UniqueDescriptorSet DescriptorWriter::build(){
+		vk::DescriptorSet DescriptorWriter::build(){
 
 			auto outSet = pool_.allocate(layout_);
 			overwrite(outSet);
-			return std::move(outSet);
+			return outSet;
 		}
 		
 }

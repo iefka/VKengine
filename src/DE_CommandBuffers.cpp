@@ -13,7 +13,7 @@ namespace de {
 
 		pool_ = logicalDevice.createCommandPoolUnique(commandPoolInfo);
 	}
-	CommandBuffer CommandPool::allocate  (vk::CommandBufferLevel bufferLevel, uint32_t bufferCount){
+	CommandBuffer CommandPool::allocate  (vk::CommandBufferLevel bufferLevel, uint32_t bufferCount)const {
 		
 		const auto& logicalDevice = device_.getLogicalDevice();
 		
