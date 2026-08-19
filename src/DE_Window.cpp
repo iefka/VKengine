@@ -1,8 +1,7 @@
 #include"DE_Instance.hpp"
 #include"DE_Device.hpp"
 #include "DE_Window.hpp"
-#include <fmt/format.h>
-
+#include<iostream>
 
 
 namespace de {
@@ -43,17 +42,39 @@ namespace de {
 
 		if ( auto result = glfwCreateWindowSurface(instance_vk, glfwWindow_.get(), nullptr, &surface);
 			result != VK_SUCCESS) {
-			throw std::runtime_error(fmt::format("failed to create window surface. Error: {}", vk::to_string(static_cast<vk::Result>(result))));
+			throw std::runtime_error("failed to create window surface");
 		}
 		vk::detail::ObjectDestroy<vk::Instance, VULKAN_HPP_DEFAULT_DISPATCHER_TYPE> deleter{ instance_vk };
 		
 		surface_ = vk::UniqueSurfaceKHR(vk::SurfaceKHR(surface), deleter);
 	}
 
-	void Window::requestWindowFormat(const Device& device){
+	void Window::selectSurfaceFormat(const Device& device, vk::SurfaceFormatKHR preferedSurfaceFormat){
+	
+		auto suportedFormats = requestWindowFormat(device);
+
+		if (suportedFormats.empty()) {
+			throw std::runtime_error("no suported format found!");
+		}
+
+		auto it = std::find_if(suportedFormats.begin(), suportedFormats.end(),
+			[preferedSurfaceFormat](vk::SurfaceFormatKHR currentFormat) {
+				return preferedSurfaceFormat == currentFormat;
+			});
+			
+		if (it == suportedFormats.end()) {
+			std::cout << "Warning!: prefered surface format is not suported, selected first suported: " <<
+				vk::to_string(suportedFormats[0].format)<<std::endl;
+			selectedSurfaceFormat_ = suportedFormats[0];
+			return;
+		}
+		selectedSurfaceFormat_ = *it;
+	}
+
+	std::vector<vk::SurfaceFormatKHR> Window::requestWindowFormat(const Device& device) {
 		const auto& physicalDevice = device.getPhysicalDevice();
 
-		surfaceFormats_ = physicalDevice.getSurfaceFormatsKHR(*surface_);
+		return physicalDevice.getSurfaceFormatsKHR(*surface_);
 	}
 
 	window_ptr_t Window::initAndCreateWindow(uint16_t width, uint16_t height, const char* windowTitle)

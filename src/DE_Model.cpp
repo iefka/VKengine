@@ -45,7 +45,7 @@ namespace de {
 
 
 
-		if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filepath.c_str())) {
+		if (!tinyobj::LoadObj(&attrib, &shapes, &materials,&warn, &err, filepath.c_str())) {
 			throw std::runtime_error(err);
 		}
 

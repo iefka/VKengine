@@ -34,23 +34,27 @@ namespace de {
 		
 		GLFWwindow* getGlfwWindow() { return glfwWindow_.get(); }
 
+		vk::SurfaceFormatKHR getSurfaceFormat() const noexcept {
+			return selectedSurfaceFormat_;
+		}
+
 		void createSurface(const Instance& instance);
-		//requset formats from device and store into class
-		void requestWindowFormat(const Device& device);
+
+
+		//if suport select prefered format and store it, else select first suported
+		void selectSurfaceFormat(const Device& device, vk::SurfaceFormatKHR preferedSurfaceFormat);
 
 		const vk::UniqueSurfaceKHR& getSurface() const noexcept {
 			return surface_;
 		}
-		const std::vector<vk::SurfaceFormatKHR>& getSurfaceFormats() {
-			return surfaceFormats_;
-		}
-		void endResize() {
+
+		void endResize()  {
 			windowResized = false;
 		}
-		bool isResized() {
+		bool isResized() const {
 			return windowResized;
 		}
-		bool isMinimized() {
+		bool isMinimized() const {
 			return windowMinimized;
 		}
 		 const vk::Extent2D getExtent() const noexcept {
@@ -58,6 +62,7 @@ namespace de {
 		}
 
 	private:
+		std::vector<vk::SurfaceFormatKHR> requestWindowFormat(const Device& device);
 
 		static void frameBufferResizeCallback(GLFWwindow* window, int width, int height);
 
@@ -72,7 +77,7 @@ namespace de {
 		bool windowResized = false;
 
 		vk::UniqueSurfaceKHR surface_;
-		std::vector<vk::SurfaceFormatKHR> surfaceFormats_;
+		vk::SurfaceFormatKHR selectedSurfaceFormat_;
 	};
 }
 #endif // !1

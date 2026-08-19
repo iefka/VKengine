@@ -18,7 +18,7 @@ namespace de {
 		struct Vertex {
 		public:
 			glm::vec3 position{};
-			glm::vec3 color{0.1f,0.5f,0.8f};
+			glm::vec3 color{1.0f,1.0f,1.0f};
 			glm::vec3 normal{};
 			glm::vec2 uv{};
 
@@ -32,9 +32,6 @@ namespace de {
 
 			static const std::vector<vk::VertexInputAttributeDescription> getAttributes() noexcept;
 			static const std::vector <vk::VertexInputBindingDescription> getBindings()   noexcept;
-		private:
-			inline static std::vector<vk::VertexInputAttributeDescription> vertexAtributes;
-			inline static std::vector <vk::VertexInputBindingDescription> vertexBindings;
 		};
 		struct Builder {
 			std::vector<Vertex> vertices{};

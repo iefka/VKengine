@@ -10,11 +10,7 @@ namespace de {
 	public:
 		explicit CommandBuffer(std::vector<vk::UniqueCommandBuffer> commandBuffer) :cmdBuffer_(std::move(commandBuffer)) {}
 
-		//use getBuffer() to record commands
-		/*void begin(vk::CommandBufferUsageFlagBits bufferUsage)const;
-		void end()const;*/
-
-		const vk::CommandBuffer& handle(uint32_t bufferIndex) const noexcept { return *cmdBuffer_[bufferIndex]; }
+		const vk::CommandBuffer handle(uint32_t bufferIndex) const noexcept { return *cmdBuffer_[bufferIndex]; }
 
 	private:
 		std::vector <vk::UniqueCommandBuffer> cmdBuffer_;

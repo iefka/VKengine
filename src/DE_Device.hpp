@@ -17,8 +17,8 @@ struct QueueFamily{
 
 namespace de{
 
-	class CommandBuffer;
 	class CommandPool;
+	class CommandBuffer;
 	class Instance;
 
 	class Device{

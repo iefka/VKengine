@@ -91,7 +91,7 @@ namespace de{
 		}
 
 		DescriptorSetLayout::DescriptorSetLayout(const Device& device,
-			std::unordered_map<int, vk::DescriptorSetLayoutBinding> bindings) : bindings_(std::move(bindings)){
+			std::unordered_map<uint32_t, vk::DescriptorSetLayoutBinding> bindings) : bindings_(std::move(bindings)){
 
 			const auto& logicalDevice = device.getLogicalDevice();
 

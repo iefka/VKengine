@@ -1,9 +1,10 @@
-#include "DE_RenderSystem.hpp"
+#include"DE_RenderSystem.hpp"
 #include"DE_Descriptors.hpp"
 #include"DE_Device.hpp"
 #include"DE_Camera.hpp"
 #include"DE_GameObject.hpp"
 #include"DE_RenderPass.hpp"
+#include"DE_FrameData.hpp"
 
 
 namespace de {
@@ -29,28 +30,22 @@ namespace de {
 		createPipeline(extent, vkDescriptors);
 	}
 
-	void RenderSystem::renderGameObjects(const vk::CommandBuffer& commandBuffer,
-		const std::vector<GameObject>& gameObjects,
-		const Camera& camera,
-		const vk::DescriptorSet& descriptorSet){
+	void RenderSystem::renderGameObjects(const FrameInfo& frameInfo){
 
-		//extent_ = extent;
+		frameInfo.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_->getLayout(), 0, frameInfo.descriptorSet, {});
 
-		//auto aspectRaito = static_cast<float>(extent_.width) / static_cast<float>(extent_.height);
-		//auto projectionView = camera.getProjectionMatrix(aspectRaito) * camera.getViewMatrix();
+		frameInfo.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_->getPipeline());
 
-		commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_->getLayout(), 0, descriptorSet, {});
+		for (auto& pair : frameInfo.gameObjects) {
 
-		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_->getPipeline());
-
-		for (auto& obj : gameObjects) {
-			pushData.normalMatrix = obj.transform.normalMatrix();
-			pushData.modelMatrix = obj.transform.mat4();
+			auto& object = pair.second;
+			pushData.normalMatrix = object.transform.normalMatrix();
+			pushData.modelMatrix = object.transform.mat4();
 			
 			pushConstant_.setValue(pushData);
-			pushConstant_.push(commandBuffer, *graphicsPipeline_->getLayout());
-			obj.model->bind(commandBuffer);
-			obj.model->draw(commandBuffer);
+			pushConstant_.push(frameInfo.commandBuffer, *graphicsPipeline_->getLayout());
+			object.model->bind(frameInfo.commandBuffer);
+			object.model->draw(frameInfo.commandBuffer);
 		}
 	}
 
@@ -83,8 +78,7 @@ namespace de {
 			.setDepthTestEnable(true)
 			.setDepthWriteEnable(true)
 			.setDepthCompareOp(vk::CompareOp::eLess)
-			.setDepthBoundsTestEnable(false)
-			.setStencilTestEnable(true);
+			.setDepthBoundsTestEnable(false);
 
 		auto multisampleInfo = vk::PipelineMultisampleStateCreateInfo{}
 		.setRasterizationSamples(vk::SampleCountFlagBits::e1);

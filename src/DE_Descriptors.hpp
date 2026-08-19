@@ -20,10 +20,10 @@ namespace de{
 			DescriptorSetLayout build();
 		private:
 			const Device& device_;
-			std::unordered_map<int, vk::DescriptorSetLayoutBinding> bindings_;
+			std::unordered_map<uint32_t, vk::DescriptorSetLayoutBinding> bindings_;
 		};
 
-		DescriptorSetLayout(const Device& device, std::unordered_map<int, vk::DescriptorSetLayoutBinding> bindings);
+		DescriptorSetLayout(const Device& device, std::unordered_map<uint32_t, vk::DescriptorSetLayoutBinding> bindings);
 
 		~DescriptorSetLayout() = default;
 
@@ -33,12 +33,12 @@ namespace de{
 		DescriptorSetLayout& operator=(DescriptorSetLayout&&) = default;
 
 		const vk::DescriptorSetLayout& getLayout() const noexcept { return *descriptorSetLayout_; }
-		const std::unordered_map<int, vk::DescriptorSetLayoutBinding>& getBinding() const noexcept { return bindings_;}
+		const std::unordered_map<uint32_t, vk::DescriptorSetLayoutBinding>& getBinding() const noexcept { return bindings_;}
 
 
 	private:
 		vk::UniqueDescriptorSetLayout descriptorSetLayout_;
-		std::unordered_map<int, vk::DescriptorSetLayoutBinding> bindings_;
+		std::unordered_map<uint32_t, vk::DescriptorSetLayoutBinding> bindings_;
 	};
 
 

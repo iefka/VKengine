@@ -7,7 +7,7 @@
 #include<memory>
 #include<vector>
 
-#include "DE_Pipeline.hpp"
+#include"DE_Pipeline.hpp"
 #include"DE_Shaders.hpp"
 #include"DE_PushConstants.hpp"
 
@@ -18,6 +18,7 @@ namespace de {
 	class GameObject;
 	class Camera;
 	class DescriptorSetLayout;
+	struct FrameInfo;
 
 	struct SimplePushConstant {
 		glm::mat4 modelMatrix{ 1.f };
@@ -32,10 +33,7 @@ namespace de {
 			 const vk::Extent2D extent,
 			std::vector<DescriptorSetLayout>& descriptorSetLayouts);
 
-		void renderGameObjects(const vk::CommandBuffer& commandBuffer,
-			const std::vector<GameObject>& gameObjects,
-			const Camera& camera,
-			const vk::DescriptorSet& descriptorSet);
+		void renderGameObjects(const FrameInfo& frameInfo);
 	private:
 		void createPipeline(const vk::Extent2D extent, std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts);
 		

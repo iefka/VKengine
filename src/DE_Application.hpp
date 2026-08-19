@@ -8,13 +8,14 @@
 #include "DE_Memory.hpp"
 #include "DE_RenderPass.hpp"
 #include "DE_Renderer.hpp"
-#include "DE_RenderSystem.hpp"
+#include "Systems/DE_RenderSystem.hpp"
 #include "DE_CommandBuffers.hpp"
 #include "DE_Descriptors.hpp"
 #include "DE_ControledCamera.hpp"
 #include"DE_GameObject.hpp"
 #include "Utility/DE_Debug.hpp"
 #include "Utility/DE_Utility.hpp"
+#include"DE_FrameData.hpp"
 #include"glm_config.hpp"
 
 
@@ -42,6 +43,7 @@ struct ApplicationConfig {
 	int windowHeight = 600;
 	const char* windowTitle = "MyEngine";
 	uint32_t swapchainImageCount = 2;
+	uint32_t framesInFlight = 2;
 
 	// Vulkan metadata
 	const char* applicationName = "Dimasik";
@@ -64,16 +66,13 @@ private:
 	void initGameObjects();
 	void initRenderSystem();
 	void initRenderPass();
-	void initSwapchain();
+	void initRenderer();
 	void initCommandPool();
 	void initDescriptorSets();
 
 	// helpers
 	std::vector<const char*> getRequiredExtensions();
-	void recordCommandBuffer(const de::FrameData& frameData);
 	void updateScene(float deltaTime);
-	void handleWindowResize();
-	void recreateSwapchain();
 	void renderFrame();
 	void handleInputs(float deltaTime);
 	void mainLoop();
@@ -89,19 +88,17 @@ private:
 	// resources
 	std::unique_ptr<de::DescriptorPool> globalPool_;
 	std::vector<de::DescriptorSetLayout> descriptorLayouts_;
-	std::vector<de::GameObject> gameObjects;
+	std::vector<vk::DescriptorSet> globalDescriptorSets_;
+	de::GameObject::Map gameObjects;
 	std::vector<std::unique_ptr<de::Buffer>> uboBuffers_;
 
 	std::unique_ptr<de::RenderPass> renderPass_;
 	std::unique_ptr<de::RenderSystem> renderSystem_;
 	std::unique_ptr<de::CommandPool> commandPool_;
-	std::unique_ptr<de::Swapchain> swapchain_;
+	std::unique_ptr<de::Renderer> renderer_;
 	std::unique_ptr<de::ControlledCamera> controlledCamera_;
 
 	AppTimer timer_;
-
-	vk::SurfaceFormatKHR surfaceFormat_{};
-
 };
 
 #endif // _DE_APPLICATION_

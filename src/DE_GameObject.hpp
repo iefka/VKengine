@@ -4,8 +4,9 @@
 #include"DE_Model.hpp"
 
 #include"glm_config.hpp"
-
+#include<unordered_map>
 #include<memory> 
+
 
 namespace de {
 
@@ -42,6 +43,8 @@ namespace de {
 
 	class GameObject {
 	public:
+
+		using Map = std::unordered_map<uint32_t, GameObject>;
 
 		uint32_t getId() { return id_; }
 		

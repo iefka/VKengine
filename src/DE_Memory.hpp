@@ -50,7 +50,7 @@ namespace de{
 		//save maped memory into class
 		void map(vk::DeviceSize size = vk::WholeSize, vk::DeviceSize = 0);
 		void unmap();
-		void flush(vk::DeviceSize size = vk::WholeSize, vk::DeviceSize = 0);
+		void flush(vk::DeviceSize size = vk::WholeSize, vk::DeviceSize offset = 0);
 		vk::DescriptorBufferInfo getDescriptorInfo(vk::DeviceSize offset = 0) const;
 
 		//copy data into maped memory
