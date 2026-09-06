@@ -282,9 +282,28 @@ void Application::renderFrame(de::GlobalUBO& ubo) {
 	renderer_->endFrame();
 }
 
+
 void Application::mainLoop() {
+	bool wasMinimized = false;
+
 	while (!window_.shouldClose()) {
 		glfwPollEvents();
+
+#pragma region minimize_skip
+		bool minimized = window_.isMinimized();
+
+		if (minimized) {
+			if (!wasMinimized) {           
+				std::cout << "frame skipped" << std::endl;
+				wasMinimized = true;
+			}
+			continue;                       
+		}
+		else {
+			wasMinimized = false;           
+		}
+#pragma endregion // skip frame while window minimized
+
 		de::GlobalUBO ubo{};
 		float deltaTime = timer_.getDeltaTime();
 		float totalTime = timer_.getTotalTime();
