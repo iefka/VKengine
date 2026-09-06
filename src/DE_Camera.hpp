@@ -16,11 +16,11 @@ namespace de{
 			nearPlane_{ nearPlane },
 			farPlane_{farPlane} {}
 
-		glm::mat4 Camera::getViewMatrix() const {
+		glm::mat4 getViewMatrix() const {
 			return glm::lookAt(position_, position_+lookDir_, upDir_);
 		}
 
-		glm::mat4 Camera::getProjectionMatrix(float aspectRatio) const {
+		glm::mat4 getProjectionMatrix(float aspectRatio) const {
 			auto projection = glm::perspectiveRH_ZO(glm::radians(fov_), aspectRatio, nearPlane_, farPlane_);
 			projection[1][1] *= -1.0f;
 

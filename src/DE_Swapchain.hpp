@@ -14,12 +14,6 @@ namespace de {
 		vk::UniqueDeviceMemory memory;
 	};
 
-	vk::UniqueImageView createImageView(
-		const Device& device,
-		const vk::Image& image,
-		const vk::Format& format,
-		vk::ImageAspectFlagBits imageAspect = vk::ImageAspectFlagBits::eColor);
-
 	std::vector<gpuImage> createImages(const de::Device& device,
 		uint32_t imageCreationCount,
 		const vk::Format& format,

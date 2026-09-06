@@ -88,7 +88,7 @@ namespace de {
 		currentExtent_ = scInfo.imageExtent;
 
 		depthImage_ = createDepthImage(device_, vk::Format::eD32Sfloat, scInfo.imageExtent);
-		depthImageView_ = createImageView(device_, *depthImage_.image, vk::Format::eD32Sfloat, vk::ImageAspectFlagBits::eDepth);
+		depthImageView_ = utl::createImageView(device_.getLogicalDevice(), *depthImage_.image, vk::Format::eD32Sfloat, vk::ImageAspectFlagBits::eDepth);
 
 		swapchain_ = logicalDevice.createSwapchainKHRUnique(scInfo);
 		imageViews_ = createImageViews(device_, *swapchain_, scInfo.imageFormat);
@@ -97,85 +97,8 @@ namespace de {
 		//real images count
 		imageCount_ = static_cast<std::uint32_t>(imageViews_.size());
 
-		/*
-		// per-image resources
-		readyForPresentingSemaphores_.resize(imageCount_);
-		for (std::uint32_t i = 0; i < imageCount_; ++i) {
-			readyForPresentingSemaphores_[i] = logicalDevice.createSemaphoreUnique(vk::SemaphoreCreateInfo{});
-		}
-		// изначально ни один image не занят никаким кадром
-		imagesInFlightFences_.assign(imageCount_, vk::Fence{});
 
-		// per-frame-in-flight resources
-		for (std::uint32_t i = 0; i < framesInFlight_; ++i) {
-			inFlightFences_.push_back(logicalDevice.createFenceUnique(
-				vk::FenceCreateInfo{}.setFlags(vk::FenceCreateFlagBits::eSignaled)
-			));
-			readyForRenderingSemaphores_.push_back(logicalDevice.createSemaphoreUnique(
-				vk::SemaphoreCreateInfo{}
-			));
-		}*/
 	}
-
-	/*void Swapchain::createFrameResources(const CommandPool& cmdPool) {
-		frameCommandBuffer_ = std::make_unique<CommandBuffer>(
-			cmdPool.allocate(vk::CommandBufferLevel::ePrimary, framesInFlight_)
-		);
-	}*/
-
-	/*void Swapchain::createFrameDescriptorSets(const DescriptorPool& descriptorPool, const DescriptorSetLayout& layout, const std::vector<std::unique_ptr<Buffer>>& buffers) {
-		frameDescriptorSets_.resize(framesInFlight_);
-		for (size_t i = 0; i < frameDescriptorSets_.size(); i++) {
-			auto bufferInfo = buffers[i]->getDescriptorInfo();
-			frameDescriptorSets_[i] = de::DescriptorWriter(device_, descriptorPool, layout)
-				.writeBuffer(0, &bufferInfo)
-				.build();
-		}
-	}*/
-
-	/*
-	 //--use later in renderer--
-	FrameData Swapchain::getNextFrame() {
-		const auto& logicalDevice = device_.getLogicalDevice();
-
-		// 1. wait frame slot
-		const auto waitResult = logicalDevice.waitForFences(
-			*inFlightFences_[currentFrameIndex_],
-			true,
-			std::numeric_limits<uint64_t>::max());
-
-		// 2. geting real image index
-		auto imageIndex = logicalDevice.acquireNextImageKHR(*swapchain_,
-			std::numeric_limits<uint64_t>::max(),
-			*readyForRenderingSemaphores_[currentFrameIndex_]).value;
-
-		// 3. wait current image 
-		if (imagesInFlightFences_[imageIndex]) {
-			auto _ = logicalDevice.waitForFences(
-				imagesInFlightFences_[imageIndex],
-				true,
-				std::numeric_limits<uint64_t>::max());
-		}
-		// помечаем: assign image to current frame slot
-		imagesInFlightFences_[imageIndex] = *inFlightFences_[currentFrameIndex_];
-
-		// 4. now can reset fence and reuse command buffer
-		logicalDevice.resetFences(*inFlightFences_[currentFrameIndex_]);
-
-		auto frame = FrameData{
-			imageIndex,
-			currentFrameIndex_,
-			framebuffers_[imageIndex],
-			inFlightFences_[currentFrameIndex_],
-			readyForRenderingSemaphores_[currentFrameIndex_],
-			readyForPresentingSemaphores_[imageIndex],
-			frameCommandBuffer_->handle(currentFrameIndex_),
-			frameDescriptorSets_[currentFrameIndex_]
-		};
-
-		currentFrameIndex_ = (currentFrameIndex_ + 1) % framesInFlight_;
-		return frame;
-	}*/
 
 	std::vector<vk::UniqueFramebuffer> createFramebuffers(
 		const Device& device,
@@ -202,31 +125,6 @@ namespace de {
 
 		return framebuffers;
 	}
-
-	vk::UniqueImageView createImageView(
-		const Device& device,
-		const vk::Image& image,
-		const vk::Format& format,
-		vk::ImageAspectFlagBits imageAspect) {
-
-		const auto& logicalDevice = device.getLogicalDevice();
-
-		const auto subresourceRange = vk::ImageSubresourceRange{}
-			.setAspectMask(imageAspect)
-			.setBaseMipLevel(0)
-			.setLevelCount(1)
-			.setBaseArrayLayer(0)
-			.setLayerCount(1);
-
-		const auto imageInfo = vk::ImageViewCreateInfo{}
-			.setImage(image)
-			.setViewType(vk::ImageViewType::e2D)
-			.setFormat(format)
-			.setSubresourceRange(subresourceRange);
-
-		return logicalDevice.createImageViewUnique(imageInfo);
-	}
-
 
 	std::vector<gpuImage> createImages(const de::Device& device,
 		uint32_t imageCreationCount,
@@ -310,7 +208,8 @@ namespace de {
 		for (const auto& image : swapchainImages) {
 
 			swapChainImageViews.push_back(
-				createImageView(device, image, format)
+				utl::createImageView(device.getLogicalDevice(), image,
+					format,vk::ImageAspectFlagBits::eColor)
 			);
 		}
 		return swapChainImageViews;

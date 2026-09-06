@@ -1,11 +1,12 @@
 #define TINYOBJLOADER_IMPLEMENTATION
-#define TINYOBJLOADER_USE_EXTENSION
 #include "tiny_obj_loader.h"
 
 
 #include"DE_Device.hpp"
 #include "DE_Model.hpp"
 #include"Utility/DE_Utility.hpp"
+#include"Material.hpp"
+#include"MaterialManager.hpp"
 
 #include <iostream>
 #include <unordered_map>
@@ -25,39 +26,43 @@ namespace de {
 
 	Model::Model(const Device& device, const Builder& builder) : device_{ device } {
 
+		material_ = builder.tempMaterialPtr;
 		createVertexBuffer(builder.vertices);
 		createIndexBuffer(builder.indices);
 	}
 
-	std::unique_ptr<Model> Model::createModelFromFile(const Device& device, const std::string& filepath)
+	std::unique_ptr<Model> Model::createModelFromFile(const Device& device, const std::string& filepath, MaterialManager& materialManager)
 	{
 		Builder builder{};
-		builder.loadModel(filepath);
+		builder.loadModel(filepath,materialManager);
 		std::cout <<"Vertex count : " << builder.vertices.size() << std::endl;
 		return std::make_unique<Model>(device,builder);
 	}
 
-	void Model::Builder::loadModel(const std::string& filepath) {
+	void Model::Builder::loadModel(const std::string& filepath, MaterialManager& materialManager) {
 		tinyobj::attrib_t attrib;
 		std::vector<tinyobj::shape_t> shapes;
 		std::vector<tinyobj::material_t> materials;
 		std::string warn, err;
 
-
-
-		if (!tinyobj::LoadObj(&attrib, &shapes, &materials,&warn, &err, filepath.c_str())) {
+		if (!tinyobj::LoadObj(&attrib, &shapes, &materials,&warn, &err, filepath.c_str(), materialManager.getMaterialsPath().c_str())) {
 			throw std::runtime_error(err);
 		}
-
 		
 		vertices.clear();
 		indices.clear();
 
+		if (!materials.empty()) {
+			tempMaterialPtr = materialManager.getMaterial(materials[0]);
+		}else{
+			tempMaterialPtr = materialManager.getDefaultMaterial();
+		}
+
 		std::unordered_map<Vertex, uint32_t> uniqueVertices{};
 		for (const auto& shape : shapes) {
+			
 			for (const auto& index : shape.mesh.indices) {
 				Vertex vertex{};
-
 				if (index.vertex_index >= 0) {
 					vertex.position = {
 						attrib.vertices[3 * index.vertex_index + 0],
@@ -111,6 +116,10 @@ namespace de {
 		}
 	}
 
+	const Material& Model::getMaterial() {
+		return *material_;
+	}
+
 	void Model::createVertexBuffer(const std::vector<Vertex>& vertices) {
 
 		//defining sizes
@@ -139,7 +148,7 @@ namespace de {
 
 		vertexBuffer_ = std::make_unique<Buffer>(device_, vertexBufferInfo);
 		//copy data from staging buffer to vertex buffer
-		device_.CopyBuffer(*stagingBuffer.getBuffer(), *vertexBuffer_->getBuffer(), bufferSize);
+		device_.copyBuffer(*stagingBuffer.getBuffer(), *vertexBuffer_->getBuffer(), bufferSize);
 	}
 
 	void Model::createIndexBuffer(const std::vector<uint32_t>& indices) {
@@ -174,7 +183,7 @@ namespace de {
 
 		indexBuffer_ = std::make_unique<Buffer>(device_, indexBufferInfo);
 		//copy data from staging buffer to index buffer
-		device_.CopyBuffer(*stagingBuffer.getBuffer(), *indexBuffer_->getBuffer(), bufferSize);
+		device_.copyBuffer(*stagingBuffer.getBuffer(), *indexBuffer_->getBuffer(), bufferSize);
 	}
 
 	const std::vector<vk::VertexInputBindingDescription> Model::Vertex::getBindings() noexcept {

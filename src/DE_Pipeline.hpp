@@ -6,6 +6,7 @@
 //vk
 #include <vulkan/vulkan.hpp>
 //de
+#include "DE_Device.hpp"
 #include "DE_PipelineTraits.hpp"
 
 namespace de{

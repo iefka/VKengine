@@ -40,6 +40,9 @@ namespace de {
 		}
 	};
 
+	struct PointLightComponent {
+		float lightIntensity = 1.f;
+	};
 
 	class GameObject {
 	public:
@@ -53,6 +56,16 @@ namespace de {
 				return GameObject(currentID++);
 		}
 
+		static GameObject makePointLight(float intensity = 1.f, float radius = 1.f, glm::vec3 color = glm::vec3(1.f)) {
+			GameObject gameobj = GameObject::createGameObject();
+
+			gameobj.color = color;
+			gameobj.transform.scale.x = radius;
+			gameobj.pointLight_ = std::make_unique<PointLightComponent>();
+			gameobj.pointLight_->lightIntensity = intensity;
+			return gameobj;
+		}
+
 		GameObject(const GameObject&) = delete;
 		GameObject& operator= (const GameObject&) = delete;
 		GameObject(GameObject&&) = default;
@@ -61,6 +74,9 @@ namespace de {
 		std::unique_ptr<Model> model{};
 		glm::vec3 color{};
 		TransformComponent transform{};
+		std::unique_ptr<PointLightComponent> pointLight_ = nullptr;
+		std::shared_ptr<Material> material_;
+
 	private:
 		GameObject(uint32_t ID) : id_{ID} {}
 		uint32_t id_;

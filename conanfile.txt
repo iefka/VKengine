@@ -1,6 +1,5 @@
 [requires]
 glfw/3.4
-fmt/12.1.0
 
 [generators]
 CMakeToolchain

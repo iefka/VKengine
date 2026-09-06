@@ -50,7 +50,6 @@ namespace de{
 		unmap();
 	}
 
-	//return maped memory
 	void Buffer::map(vk::DeviceSize size, vk::DeviceSize offset){
 		mapedMemory_ = logicalDevice_.mapMemory(*gpuBuffer_.memory, offset, size == vk::WholeSize? aligmentBuferSize_ : size);
 	}
@@ -86,6 +85,32 @@ namespace de{
 		}
 		char* dst = static_cast<char*>(mapedMemory_) + offset;
 		memcpy(dst, data, size);
+	}
+
+	//-image implementation-
+	Image::Image(const Device& device, const ImageUsageInfo& imageInfo) : device_{device}{
+	
+		const auto& logicalDevice = device_.getLogicalDevice();
+		const auto& physicalDevice = device_.getPhysicalDevice();
+
+			gpuImage_.image = logicalDevice.createImageUnique(imageInfo.createInfo);
+
+
+			const auto memoryRequirements_ = logicalDevice.getImageMemoryRequirements(*gpuImage_.image);
+			const auto memoryProp = physicalDevice.getMemoryProperties();
+
+			const auto aligmentSize = alingUp(memoryRequirements_.size, memoryRequirements_.alignment);
+
+			const auto memoryTypeIndex = utl::getSuitableMemoryIndex(memoryProp,
+				memoryRequirements_.memoryTypeBits, imageInfo.memoryFlags);
+
+			const auto allocateInfo = vk::MemoryAllocateInfo{}
+				.setAllocationSize(aligmentSize)
+				.setMemoryTypeIndex(memoryTypeIndex);
+
+			gpuImage_.memory = logicalDevice.allocateMemoryUnique(allocateInfo);
+
+			logicalDevice.bindImageMemory(*gpuImage_.image, *gpuImage_.memory, imageInfo.offset);
 	}
 }
 

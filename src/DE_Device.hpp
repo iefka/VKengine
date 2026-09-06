@@ -34,10 +34,20 @@ namespace de{
 		Device(Device&&) = default;
 		Device& operator=(Device&&) = default;
 
-		void CopyBuffer(
+		void copyBuffer(
 			const vk::Buffer& srcBuffer,
 			const vk::Buffer& dstBuffer,
 			vk::DeviceSize size) const;
+
+		//layout of copying image must be TransferDstOptimal before usage!
+		void copyBufferToImage(
+			const vk::Buffer& srcBuffer,
+			const vk::Image& dstImage,
+			uint32_t width,
+			uint32_t height) const;
+
+		void transitionImageLayout(vk::Image image, vk::Format format,
+			vk::ImageLayout oldLayout, vk::ImageLayout newLayout) const;
 
 		const vk::PhysicalDevice& getPhysicalDevice() const noexcept{ return physicalDevice_; }
 		const vk::Device& getLogicalDevice() const noexcept{ return *uLogicalDevice_; }

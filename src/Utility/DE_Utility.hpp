@@ -39,6 +39,29 @@ namespace de {
 			(hashCombine(seed, rest), ...);
 		}
 
+		inline vk::UniqueImageView createImageView(
+			const vk::Device& logicalDevice,
+			const vk::Image& image,
+			const vk::Format& format,
+			vk::ImageAspectFlagBits imageAspect) {
+
+
+			const auto subresourceRange = vk::ImageSubresourceRange{}
+				.setAspectMask(imageAspect)
+				.setBaseMipLevel(0)
+				.setLevelCount(1)
+				.setBaseArrayLayer(0)
+				.setLayerCount(1);
+
+			const auto imageInfo = vk::ImageViewCreateInfo{}
+				.setImage(image)
+				.setViewType(vk::ImageViewType::e2D)
+				.setFormat(format)
+				.setSubresourceRange(subresourceRange);
+
+			return logicalDevice.createImageViewUnique(imageInfo);
+		}
+
 	}
 }
 #endif // !_DE_UTILITY_

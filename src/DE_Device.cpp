@@ -23,6 +23,7 @@ namespace de{
 		//get queue families
 		const auto queueFamilies = physicalDevice_.getQueueFamilyProperties();
 
+		
 
 		//request family index for two queue graphics and presentation
 		queues_.resize(2);
@@ -42,7 +43,7 @@ namespace de{
 			vk::CommandPoolCreateFlagBits::eTransient);
 	}
 
-	void Device::CopyBuffer(const vk::Buffer& srcBuffer, const vk::Buffer& dstBuffer, vk::DeviceSize size) const{
+	void Device::copyBuffer(const vk::Buffer& srcBuffer, const vk::Buffer& dstBuffer, vk::DeviceSize size) const{
 		auto cmd = beginSingleCommand();
 
 		const auto& commandBuffer = cmd.handle(0);
@@ -53,6 +54,86 @@ namespace de{
 			.setSize(size);
 			
 		commandBuffer.copyBuffer(srcBuffer,dstBuffer,BufferRegion);
+
+		endSingleCommand(commandBuffer);
+	}
+
+	void Device::copyBufferToImage(const vk::Buffer& srcBuffer,
+		const vk::Image& dstImage,
+		uint32_t width, 
+		uint32_t height) const{
+		auto cmd = beginSingleCommand();
+
+		const auto& commandBuffer = cmd.handle(0);
+
+		const auto imageSubresource = vk::ImageSubresourceLayers{}
+			.setAspectMask(vk::ImageAspectFlagBits::eColor)
+			.setBaseArrayLayer(0)
+			.setLayerCount(1)
+			.setMipLevel(0);
+
+		const auto region = vk::BufferImageCopy{}
+			.setBufferRowLength(0)
+			.setBufferOffset(0)
+			.setBufferImageHeight(0)
+			.setImageOffset(0)
+			.setImageExtent(vk::Extent3D{ width,height,1 })
+			.setImageSubresource(imageSubresource);
+
+		commandBuffer.copyBufferToImage(srcBuffer, dstImage, vk::ImageLayout::eTransferDstOptimal, region);
+
+		endSingleCommand(commandBuffer);
+
+
+	}
+
+	void Device::transitionImageLayout(vk::Image image, vk::Format format,
+		vk::ImageLayout oldLayout, vk::ImageLayout newLayout) const {
+	
+		auto cmd = beginSingleCommand();
+		const auto& commandBuffer = cmd.handle(0);
+
+		vk::PipelineStageFlags sourceStage{}, destenationStage{};
+
+		const auto imageSubresource = vk::ImageSubresourceRange{}
+			.setAspectMask(vk::ImageAspectFlagBits::eColor)
+			.setBaseArrayLayer(0)
+			.setLayerCount(1)
+			.setBaseMipLevel(0)
+			.setLevelCount(1);
+
+		 auto imageBarier = vk::ImageMemoryBarrier{}
+			.setOldLayout(oldLayout)
+			.setNewLayout(newLayout)
+			.setDstQueueFamilyIndex(vk::QueueFamilyIgnored)
+			.setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
+			.setImage(image)
+			.setSubresourceRange(imageSubresource);
+
+		 if (oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eTransferDstOptimal) {
+			 imageBarier.srcAccessMask  = vk::AccessFlagBits::eNone;
+			 imageBarier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
+
+			 sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+			 destenationStage = vk::PipelineStageFlagBits::eTransfer;
+		 }else if (oldLayout == vk::ImageLayout::eTransferDstOptimal && newLayout == vk::ImageLayout::eShaderReadOnlyOptimal) {
+			 imageBarier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+			 imageBarier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+			 sourceStage = vk::PipelineStageFlagBits::eTransfer;
+			 destenationStage = vk::PipelineStageFlagBits::eFragmentShader;
+		 }else {
+			 throw std::runtime_error("unsuported image layout transition");
+		 }
+
+
+		commandBuffer.pipelineBarrier(
+			sourceStage,
+			destenationStage,
+			vk::DependencyFlags{},
+			nullptr,
+			nullptr,
+			imageBarier);
 
 		endSingleCommand(commandBuffer);
 	}
@@ -123,6 +204,10 @@ namespace de{
 			familyIndexCount[qf.queuFamilyIndex]++;
 		}
 
+		vk::PhysicalDeviceFeatures deviceFeatures{};
+		physicalDevice_.getFeatures(&deviceFeatures);
+
+		deviceFeatures;
 
 		std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos{};
 
@@ -136,7 +221,20 @@ namespace de{
 			);
 		}
 		
+		using FeaturesChain = vk::StructureChain <vk::PhysicalDeviceFeatures2>;
+		FeaturesChain featuresChainCheck;
+		FeaturesChain featuresChainEnable;
+
+		physicalDevice_.getFeatures2(&featuresChainCheck.get<vk::PhysicalDeviceFeatures2>());
+
+		if (featuresChainCheck.get<vk::PhysicalDeviceFeatures2>().features.samplerAnisotropy == false) {
+			throw std::runtime_error("anisontropy feture is not suported");
+		}
+
+		featuresChainEnable.get<vk::PhysicalDeviceFeatures2>().features.samplerAnisotropy = true;
+
 		const auto deviceCreateInfo = vk::DeviceCreateInfo{}
+			.setPNext(&featuresChainEnable)
 			.setQueueCreateInfos(queueCreateInfos)
 			.setPEnabledExtensionNames(extensions_)
 			.setPEnabledLayerNames(layers_);

@@ -10,7 +10,6 @@
 #include "Utility/DE_Debug.hpp"
 #include "Utility/DE_Utility.hpp"
 
-
 #include <array>
 #include <stdexcept>
 
@@ -18,14 +17,6 @@
 // ============================================================================
 // AppTimer Implementation
 // ============================================================================
-
-struct GlobalUBO {
-	glm::mat4 projectionMatrix{ 1.f };
-	glm::mat4 viewMatrix{ 1.f };
-	glm::vec4 ambientLightColor{ 1.f,1.f,1.f, .02f };
-	glm::vec3 lightPosition{1};
-	alignas(16) glm::vec4 lightColor{1.f}; //w - intensity
-};
 
 AppTimer::AppTimer() { reset(); }
 
@@ -85,22 +76,27 @@ void Application::initResources() {
 	initDescriptorSets();
 	initGameObjects();
 	initRenderPass();
-	initRenderSystem();
+	initSystems();
 	initCommandPool();
 	initRenderer();
 }
 
 void Application::initDescriptorSets() {
 
+
+	constexpr uint32_t maxUniqueTextures = 64;
+
 	globalPool_ = std::make_unique<de::DescriptorPool>(
 		de::DescriptorPool::Builder(*device_)
-		.setMaxSets(config_.framesInFlight)
+		.setMaxSets(config_.framesInFlight + maxUniqueTextures)
 		.addPoolSize(vk::DescriptorType::eUniformBuffer, config_.framesInFlight)
+		// use one texture an just update descriptor for model befor draw
+		.addPoolSize(vk::DescriptorType::eCombinedImageSampler, 1)
 		.build()
 	);
 
 	de::MemoryUsageInfo uboBufferInfo{
-		sizeof(GlobalUBO),
+		sizeof(de::GlobalUBO),
 		1,
 		0,
 		vk::BufferUsageFlagBits::eUniformBuffer,
@@ -112,9 +108,15 @@ void Application::initDescriptorSets() {
 		);
 		uboBuffers_[i]->map();
 	}
-	
+	//set 0
 	descriptorLayouts_.push_back(de::DescriptorSetLayout::Builder{ *device_ }
 		.addBinding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eAllGraphics)
+		.build()
+	);
+
+	//set 1
+	descriptorLayouts_.push_back(de::DescriptorSetLayout::Builder{ *device_ }
+		.addBinding(0, vk::DescriptorType::eCombinedImageSampler, vk::ShaderStageFlagBits::eFragment)
 		.build()
 	);
 
@@ -130,8 +132,12 @@ void Application::initDescriptorSets() {
 
 void Application::initGameObjects() {
 
+
+	materialManager_ = std::make_unique<de::MaterialManager>(*device_, *globalPool_ ,descriptorLayouts_[1], "Materials");
+
 	controlledCamera_ = std::make_unique<de::ControlledCamera>(window_);
-	std::unique_ptr<de::Model> smoothVaseModel = de::Model::createModelFromFile(*device_,"Models/smooth_vase.obj");
+
+	std::unique_ptr<de::Model> smoothVaseModel = de::Model::createModelFromFile(*device_,"Models/smooth_vase.obj",*materialManager_);
 	auto smoothVase = de::GameObject::createGameObject();
 	smoothVase.model = std::move(smoothVaseModel);
 	smoothVase.transform.rotation.x = glm::radians(180.f);
@@ -140,15 +146,15 @@ void Application::initGameObjects() {
 	gameObjects.emplace(smoothVase.getId(), std::move(smoothVase));
 
 
-	std::unique_ptr<de::Model>flatVaseModel = de::Model::createModelFromFile(*device_, "Models/flat_vase.obj");
-	auto flatVase = de::GameObject::createGameObject();
+	std::unique_ptr<de::Model>flatVaseModel = de::Model::createModelFromFile(*device_, "Models/flat_vase.obj", *materialManager_);
+	auto flatVase = de::GameObject::createGameObject();	
 	flatVase.model = std::move(flatVaseModel);
 	flatVase.transform.rotation.x = glm::radians(180.f);
 	flatVase.transform.translation = { .6f, .0f, -0.8f };
 	flatVase.transform.scale = glm::vec3(3.f);
 	gameObjects.emplace(flatVase.getId(), std::move(flatVase));
 
-	std::unique_ptr<de::Model> cubeModel = de::Model::createModelFromFile(*device_, "Models/cube.obj");
+	std::unique_ptr<de::Model> cubeModel = de::Model::createModelFromFile(*device_, "Models/cube.obj", *materialManager_);
 	auto cube = de::GameObject::createGameObject();
 	cube.model = std::move(cubeModel);
 	cube.transform.rotation.x = glm::radians(180.f);
@@ -156,18 +162,42 @@ void Application::initGameObjects() {
 	cube.transform.translation = { 1.f, 0.2f, 0.f };
 	gameObjects.emplace(cube.getId(), std::move(cube));
 
-	std::unique_ptr<de::Model> quadModel = de::Model::createModelFromFile(*device_, "Models/quad.obj");
+	std::unique_ptr<de::Model> quadModel = de::Model::createModelFromFile(*device_, "Models/quad.obj", *materialManager_);
 	auto flor = de::GameObject::createGameObject();
 	flor.model = std::move(quadModel);
 	flor.transform.rotation.x = glm::radians(180.f);
 	flor.transform.scale = { 3.f, 1.f, 3.f };
 	flor.transform.translation = {0.f, 0.0f, 0.f};
 	gameObjects.emplace (flor.getId(), std::move(flor));
+
+
+	std::vector<glm::vec3> lightColors{
+	  {1.f, .1f, .1f},
+	  {.1f, .1f, 1.f},
+	  {.1f, 1.f, .1f},
+	  {1.f, 1.f, .1f},
+	  {.1f, 1.f, 1.f},
+	  {1.f, 1.f, 1.f}  //
+	};
+
+	for (int i = 0; i < lightColors.size(); i++) {
+		auto pointLight = de::GameObject::makePointLight(0.2f,0.1f);
+		pointLight.color = lightColors[i];
+		auto rotateLight = glm::rotate(
+			glm::mat4(1.f),
+			(i * glm::two_pi<float>()) / lightColors.size(),
+			{ 0.f, 1.f, 0.f });
+		pointLight.transform.translation = glm::vec3(rotateLight * glm::vec4(1.f, 1.f, 1.f, 1.f));
+		gameObjects.emplace(pointLight.getId(), std::move(pointLight));
+	}
 }
 
-void Application::initRenderSystem(){
+void Application::initSystems(){
 	renderSystem_ = std::make_unique<de::RenderSystem>(
-		de::RenderSystem(*device_, *renderPass_, window_.getExtent(),descriptorLayouts_)
+		*device_, *renderPass_, window_.getExtent(),descriptorLayouts_
+	);
+	pointLightSystem_ = std::make_unique<de::PointLightSystem>(
+		*device_, *renderPass_, window_.getExtent(), descriptorLayouts_
 	);
 }
 
@@ -223,7 +253,7 @@ std::pair<vk::Viewport, vk::Rect2D> getViewportState(const vk::Extent2D& viewpor
 };
 
 
-void Application::renderFrame() {
+void Application::renderFrame(de::GlobalUBO& ubo) {
 	auto frameOptimal = renderer_->beginFrame();
 	if (!frameOptimal) { return; }
 	auto& frame = *frameOptimal;
@@ -238,22 +268,16 @@ void Application::renderFrame() {
 		
 	};
 
-	const auto& camera = controlledCamera_-> getCamera();
-	const auto extent = window_.getExtent();
-	auto aspectRaito = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-	GlobalUBO ubo{};
-	ubo.projectionMatrix = camera.getProjectionMatrix(aspectRaito);
-	ubo.viewMatrix = camera.getViewMatrix();
-
 	auto clearValues = std::vector<vk::ClearValue>{
 		vk::ClearValue{}.setColor(std::array<float, 4>{{0.0f, 0.0f, 0.0f, 1.0f}}),
 		vk::ClearValue{}.setDepthStencil(vk::ClearDepthStencilValue{1.0f, 0}) };
 
-	uboBuffers_[frame.frameIndex]->copyToBuffer(&ubo,sizeof(GlobalUBO),0);
+	uboBuffers_[frame.frameIndex]->copyToBuffer(&ubo,sizeof(ubo),0);
 	uboBuffers_[frame.frameIndex]->flush();
 
 	renderer_->beginRenderPass(frame, renderer_->getSwapchainRenderTarget(), clearValues);
 	renderSystem_->renderGameObjects(frameInfo);
+	pointLightSystem_->render(frameInfo);
 	renderer_->endRenderPass(frame);
 	renderer_->endFrame();
 }
@@ -261,10 +285,12 @@ void Application::renderFrame() {
 void Application::mainLoop() {
 	while (!window_.shouldClose()) {
 		glfwPollEvents();
+		de::GlobalUBO ubo{};
 		float deltaTime = timer_.getDeltaTime();
+		float totalTime = timer_.getTotalTime();
 		handleInputs(deltaTime);
-		updateScene(deltaTime);
-		renderFrame();
+		updateScene(deltaTime, totalTime, ubo);
+		renderFrame(ubo);
 	}
 	cleanup();
 }
@@ -281,7 +307,17 @@ void Application::handleInputs(float deltaTime) {
 	controlledCamera_->handleInputs(deltaTime, GLFW_KEY_C);
 }
 
-void Application::updateScene(float deltaTime) {
-	float speed = 1.0f; // радиан в секунду
+void Application::updateScene(float deltaTime, float totalTime , de::GlobalUBO& ubo) {
+	
 	controlledCamera_->updateCamera(deltaTime);
+
+	pointLightSystem_->update(gameObjects, ubo, deltaTime, totalTime);
+
+	const auto& camera = controlledCamera_->getCamera();
+	const auto extent = window_.getExtent();
+	auto aspectRaito = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+	ubo.projectionMatrix = camera.getProjectionMatrix(aspectRaito);
+	ubo.viewMatrix = camera.getViewMatrix();
+	ubo.inverceViewMatrix = glm::inverse(camera.getViewMatrix());
+
 }

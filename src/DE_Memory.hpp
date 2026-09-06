@@ -9,6 +9,25 @@ namespace de{
 	class Device;
 
 
+	struct ImageUsageInfo {
+
+
+		ImageUsageInfo(vk::DeviceSize size_ = 0,
+		vk::DeviceSize offset_ = 0,
+		vk::ImageCreateInfo createInfo_ = {},
+		vk::MemoryPropertyFlags memoryFlags_ = { vk::MemoryPropertyFlagBits::eDeviceLocal })
+			:size{size_},
+			offset{offset_},
+			createInfo{createInfo_},
+			memoryFlags{memoryFlags_}{}
+
+
+		vk::DeviceSize size = 0;
+		vk::DeviceSize offset = 0;
+		vk::ImageCreateInfo createInfo = {};
+		vk::MemoryPropertyFlags memoryFlags = { vk::MemoryPropertyFlagBits::eDeviceLocal };
+	};
+
 	struct MemoryUsageInfo{
 
 		MemoryUsageInfo(vk::DeviceSize size_ = {0},
@@ -23,13 +42,13 @@ namespace de{
 				memoryFlags{memoryFlags_},
 				offset{offset_} {}
 
-		vk::DeviceSize			size		= 0;
+		vk::DeviceSize			size		  = 0;
 		uint32_t				instanceCount = 1;
 		vk::BufferUsageFlags	bufferUsage = {};
-		vk::DeviceSize			offset		= 0;
-		vk::MemoryPropertyFlags memoryFlags =
-										vk::MemoryPropertyFlagBits::eHostVisible 
-										| vk::MemoryPropertyFlagBits::eHostCoherent;
+		vk::DeviceSize			offset = 0;
+		vk::MemoryPropertyFlags memoryFlags{
+										vk::MemoryPropertyFlagBits::eHostVisible
+										| vk::MemoryPropertyFlagBits::eHostCoherent };
 	};
 	class Buffer{
 	public:
@@ -47,7 +66,7 @@ namespace de{
 			return gpuBuffer_.buffer;
 		}
 
-		//save maped memory into class
+		//save maped memory into class (memory automaticly unmap when object destruct)
 		void map(vk::DeviceSize size = vk::WholeSize, vk::DeviceSize = 0);
 		void unmap();
 		void flush(vk::DeviceSize size = vk::WholeSize, vk::DeviceSize offset = 0);
@@ -79,6 +98,29 @@ namespace de{
 		
 	};
 
+	class Image {
+	public:
+		Image(const Device& device,const ImageUsageInfo& imageInfo);
+		~Image() = default;
+
+		Image(const Image&) = delete;
+		Image& operator=(const Image&) = delete;
+
+		Image(Image&&) = default;
+		Image& operator=(Image&&) = default;
+
+		const vk::Image getImage() const noexcept {
+			return *gpuImage_.image;
+		}
+	private:
+
+		const Device& device_;
+
+		struct {
+			vk::UniqueImage image;
+			vk::UniqueDeviceMemory memory;
+		}gpuImage_;
+	};
 	
 }
 #endif // !_DE_MEMORY_
