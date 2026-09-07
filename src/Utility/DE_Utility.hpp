@@ -8,9 +8,11 @@
 namespace de {
 	namespace utl {
 
-		inline uint32_t getVertexFormatSize(vk::Format format) {
+		inline uint32_t getFormatSize(vk::Format format) {
 			switch (format)
 			{
+			case vk::Format::eR8G8B8A8Unorm:
+				return static_cast<uint32_t>(4);
 			case vk::Format::eR32G32B32A32Sfloat:
 				return static_cast<uint32_t> (4 * sizeof(float));
 			case vk::Format::eR32G32B32Sfloat:
