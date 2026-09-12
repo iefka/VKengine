@@ -111,7 +111,7 @@ namespace de {
 		vk::SwapchainKHR getHandle() const noexcept { return *swapchain_; }
 		vk::Framebuffer getFrameBuffer(uint32_t imageIndex) const { return *framebuffers_.at(imageIndex); }
 		vk::Extent2D getSwapchainExtent() const noexcept{ return currentExtent_; }
-		vk::RenderPass getRenderPass()const noexcept{return *renderPass_.getRenderPass();;}
+		vk::RenderPass getRenderPass()const noexcept{return *renderPass_.getRenderPass();}
 
 	private:
 		friend class Builder;

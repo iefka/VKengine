@@ -19,7 +19,7 @@ namespace de {
 				return static_cast<uint32_t> (3 * sizeof(float));
 
 			default:
-				throw std::invalid_argument("unsuported vertex format");
+				throw std::invalid_argument("unsuported format");
 			}
 		}
 

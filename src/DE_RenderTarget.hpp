@@ -3,6 +3,7 @@
 
 #include<vulkan/vulkan.hpp>
 #include"DE_Swapchain.hpp"
+#include"DE_Gui.hpp"
 
 namespace de {
 
@@ -34,6 +35,26 @@ namespace de {
 		 }
 	private:
 		const Swapchain* swapchain_ = nullptr;
+	};
+
+	class GUIRenderTarget : public RenderTarget {
+	public:
+
+		// GUI pointer is nullptr on creation, use rebind() befor use!
+		GUIRenderTarget() = default;
+		void rebind(const GUI& Gui) { Gui_ = &Gui; }
+
+		vk::Framebuffer getFramebuffer(uint32_t imageIndex) const override {
+			return Gui_->getFrameBuffer(imageIndex);
+		}
+		vk::RenderPass getRenderPass() const override {
+			return Gui_->getRenderPass();
+		}
+		vk::Extent2D getExtent() const override {
+			return Gui_->getSwapchainExtent();
+		}
+	private:
+		const GUI* Gui_ = nullptr;
 	};
 }
 

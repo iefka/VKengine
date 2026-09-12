@@ -3,7 +3,6 @@
 #include "DE_Memory.hpp"
 #include "DE_Shaders.hpp"
 #include "DE_Pipeline.hpp"
-#include "DE_RenderPass.hpp"
 #include "DE_Renderer.hpp"
 #include "DE_CommandBuffers.hpp"
 #include "DE_PushConstants.hpp"
@@ -74,11 +73,11 @@ void Application::initVulkan() {
 void Application::initResources() {
 	
 	initDescriptorSets();
-	initGameObjects();
-	initRenderPass();
-	initSystems();
 	initCommandPool();
+	initGameObjects();
 	initRenderer();
+	initSystems();
+	preparePasses();
 }
 
 void Application::initDescriptorSets() {
@@ -88,26 +87,11 @@ void Application::initDescriptorSets() {
 
 	globalPool_ = std::make_unique<de::DescriptorPool>(
 		de::DescriptorPool::Builder(*device_)
-		.setMaxSets(config_.framesInFlight + maxUniqueTextures)
-		.addPoolSize(vk::DescriptorType::eUniformBuffer, config_.framesInFlight)
-		// use one texture an just update descriptor for model befor draw
-		.addPoolSize(vk::DescriptorType::eCombinedImageSampler, 1)
+		.setMaxSets(maxUniqueTextures)
+		.addPoolSize(vk::DescriptorType::eCombinedImageSampler, maxUniqueTextures)
 		.build()
 	);
 
-	de::MemoryUsageInfo uboBufferInfo{
-		sizeof(de::GlobalUBO),
-		1,
-		0,
-		vk::BufferUsageFlagBits::eUniformBuffer,
-		vk::MemoryPropertyFlagBits::eHostVisible
-	};
-	for (size_t i = 0; i < config_.framesInFlight; ++i){
-		uboBuffers_.push_back(
-			std::make_unique<de::Buffer>(*device_, uboBufferInfo)
-		);
-		uboBuffers_[i]->map();
-	}
 	//set 0
 	descriptorLayouts_.push_back(de::DescriptorSetLayout::Builder{ *device_ }
 		.addBinding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eAllGraphics)
@@ -120,14 +104,21 @@ void Application::initDescriptorSets() {
 		.build()
 	);
 
-	globalDescriptorSets_.resize(config_.framesInFlight);
-	for (size_t i = 0; i < globalDescriptorSets_.size(); i++) {
-		auto bufferInfo = uboBuffers_[i]->getDescriptorInfo();
-		globalDescriptorSets_[i] = de::DescriptorWriter(*device_, *globalPool_, descriptorLayouts_[0])
-			.writeBuffer(0, &bufferInfo)
-			.build();
-	}
+	
 
+}
+
+void Application::preparePasses(){
+
+	mainPass_ = std::make_unique<de::MainRenderPass>(*device_,
+		*renderer_,
+		*renderSystem_,
+		*pointLightSystem_,
+		*controlledCamera_,
+		gameObjects,
+		descriptorLayouts_[0]);
+
+	renderer_->registerPass(mainPass_.get());
 }
 
 void Application::initGameObjects() {
@@ -194,28 +185,22 @@ void Application::initGameObjects() {
 
 void Application::initSystems(){
 	renderSystem_ = std::make_unique<de::RenderSystem>(
-		*device_, *renderPass_, window_.getExtent(),descriptorLayouts_
+		*device_, renderer_->getMainRenderPass(), window_.getExtent(), descriptorLayouts_
 	);
 	pointLightSystem_ = std::make_unique<de::PointLightSystem>(
-		*device_, *renderPass_, window_.getExtent(), descriptorLayouts_
+		*device_, renderer_->getMainRenderPass(), window_.getExtent(), descriptorLayouts_
 	);
 }
 
-void Application::initRenderPass() {
-	renderPass_ = std::make_unique<de::RenderPass>(
-		de::RenderPass::Builder{*device_}
-		.setColorAttachment(window_.getSurfaceFormat().format)
-		.setDepthAttachment(vk::Format::eD32Sfloat)
-		.build()
-	);
-}
+//void Application::initRenderPass() {
+	
+//}
 
 
 void Application::initRenderer() {
 	renderer_ = 
 		std::make_unique<de::Renderer>(
 			*device_,
-			*renderPass_,
 			window_,
 			*commandPool_,
 			config_.swapchainImageCount,
@@ -253,33 +238,8 @@ std::pair<vk::Viewport, vk::Rect2D> getViewportState(const vk::Extent2D& viewpor
 };
 
 
-void Application::renderFrame(de::GlobalUBO& ubo) {
-	auto frameOptimal = renderer_->beginFrame();
-	if (!frameOptimal) { return; }
-	auto& frame = *frameOptimal;
-
-
-	de::FrameInfo frameInfo{
-		frame.frameIndex,
-		frame.commandBuffer,
-		globalDescriptorSets_[frame.frameIndex],
-		controlledCamera_->getCamera(),
-		gameObjects
-		
-	};
-
-	auto clearValues = std::vector<vk::ClearValue>{
-		vk::ClearValue{}.setColor(std::array<float, 4>{{0.0f, 0.0f, 0.0f, 1.0f}}),
-		vk::ClearValue{}.setDepthStencil(vk::ClearDepthStencilValue{1.0f, 0}) };
-
-	uboBuffers_[frame.frameIndex]->copyToBuffer(&ubo,sizeof(ubo),0);
-	uboBuffers_[frame.frameIndex]->flush();
-
-	renderer_->beginRenderPass(frame, renderer_->getSwapchainRenderTarget(), clearValues);
-	renderSystem_->renderGameObjects(frameInfo);
-	pointLightSystem_->render(frameInfo);
-	renderer_->endRenderPass(frame);
-	renderer_->endFrame();
+void Application::renderFrame() {
+	renderer_->renderFrame();
 }
 
 
@@ -302,14 +262,13 @@ void Application::mainLoop() {
 		else {
 			wasMinimized = false;           
 		}
-#pragma endregion // skip frame while window minimized
+#pragma endregion skip frame while window minimized
 
-		de::GlobalUBO ubo{};
 		float deltaTime = timer_.getDeltaTime();
 		float totalTime = timer_.getTotalTime();
 		handleInputs(deltaTime);
-		updateScene(deltaTime, totalTime, ubo);
-		renderFrame(ubo);
+		updateScene(deltaTime, totalTime);
+		renderFrame();
 	}
 	cleanup();
 }
@@ -326,17 +285,9 @@ void Application::handleInputs(float deltaTime) {
 	controlledCamera_->handleInputs(deltaTime, GLFW_KEY_C);
 }
 
-void Application::updateScene(float deltaTime, float totalTime , de::GlobalUBO& ubo) {
+void Application::updateScene(float deltaTime, float totalTime) {
 	
 	controlledCamera_->updateCamera(deltaTime);
-
-	pointLightSystem_->update(gameObjects, ubo, deltaTime, totalTime);
-
-	const auto& camera = controlledCamera_->getCamera();
-	const auto extent = window_.getExtent();
-	auto aspectRaito = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-	ubo.projectionMatrix = camera.getProjectionMatrix(aspectRaito);
-	ubo.viewMatrix = camera.getViewMatrix();
-	ubo.inverceViewMatrix = glm::inverse(camera.getViewMatrix());
+	mainPass_->updateTime(deltaTime, totalTime);
 
 }

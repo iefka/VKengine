@@ -6,9 +6,7 @@
 #include "DE_Device.hpp"
 #include "DE_Window.hpp"
 #include "DE_Memory.hpp"
-#include "DE_RenderPass.hpp"
 #include "DE_Renderer.hpp"
-#include"DE_FrameData.hpp"
 #include "Systems/DE_RenderSystem.hpp"
 #include"Systems/PointLightSystem.hpp"
 #include "DE_CommandBuffers.hpp"
@@ -19,6 +17,7 @@
 #include "Utility/DE_Utility.hpp"
 #include"glm_config.hpp"
 #include"MaterialManager.hpp"
+#include"DE_MainRenderPass.hpp"
 
 
 #include <vector>
@@ -65,16 +64,16 @@ private:
 	void initVulkan();
 	void initResources();
 	void initGameObjects();
-	void initSystems();
-	void initRenderPass();
 	void initRenderer();
+	void initSystems();
 	void initCommandPool();
 	void initDescriptorSets();
+	void preparePasses();
 
 	// helpers
 	std::vector<const char*> getRequiredExtensions();
-	void updateScene(float deltaTime, float totalTime, de::GlobalUBO& ubo);
-	void renderFrame(de::GlobalUBO& ubo);
+	void updateScene(float deltaTime, float totalTime);
+	void renderFrame();
 	void handleInputs(float deltaTime);
 	void mainLoop();
 	void cleanup();
@@ -89,12 +88,10 @@ private:
 	// resources
 	std::unique_ptr<de::DescriptorPool> globalPool_;
 	std::vector<de::DescriptorSetLayout> descriptorLayouts_;
-	std::vector<vk::DescriptorSet> globalDescriptorSets_;
 	std::unique_ptr<de::MaterialManager> materialManager_;
 	de::GameObject::Map gameObjects;
-	std::vector<std::unique_ptr<de::Buffer>> uboBuffers_;
+	std::unique_ptr<de::MainRenderPass> mainPass_;
 
-	std::unique_ptr<de::RenderPass> renderPass_;
 	std::unique_ptr<de::RenderSystem> renderSystem_;
 	std::unique_ptr<de::PointLightSystem> pointLightSystem_;
 	std::unique_ptr<de::CommandPool> commandPool_;

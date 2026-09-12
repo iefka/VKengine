@@ -21,9 +21,11 @@ namespace de {
 
 		std::shared_ptr<Texture> defaultTexture = textureManager_->getTexture(defaultTexturePath);
 
+		auto descriptorInfo = defaultTexture->getDescriptorInfo();
+
 		defaultMaterial_ = std::make_shared<Material>(defaultTexture,
 			de::DescriptorWriter{ device_,descriptorPool_,descriptorLayout_ }
-			.writeImage(0, &defaultTexture->getDescriptorInfo())
+			.writeImage(0, &descriptorInfo)
 			.build()
 		);
 
@@ -56,10 +58,12 @@ namespace de {
 			else {
 				return getDefaultMaterial();
 			}
+
+			auto desciprorInfo = texture->getDescriptorInfo();
 			sharedMaterial = std::make_shared<Material>(
 				texture,
 				de::DescriptorWriter{ device_,descriptorPool_,descriptorLayout_ }
-				.writeImage(0, &texture->getDescriptorInfo())
+				.writeImage(0, &desciprorInfo)
 				.build()
 			);
 

@@ -21,6 +21,8 @@ namespace de{
 		}
 
 		glm::mat4 getProjectionMatrix(float aspectRatio) const {
+
+
 			auto projection = glm::perspectiveRH_ZO(glm::radians(fov_), aspectRatio, nearPlane_, farPlane_);
 			projection[1][1] *= -1.0f;
 

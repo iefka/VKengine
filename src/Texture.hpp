@@ -16,6 +16,8 @@ namespace de {
 	public:
 
 		Texture(std::string pathToTexture, const Device& device);
+		Texture(const Device& device, vk::Format textureFormat,
+			void* data, uint32_t width, uint32_t height);
 
 		~Texture();
 		Texture(const Texture&) = delete;

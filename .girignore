@@ -1,0 +1,7 @@
+# .gitignore
+build/
+out/
+.vs/
+*.spv
+CMakeUserPresets.json
+*.user
