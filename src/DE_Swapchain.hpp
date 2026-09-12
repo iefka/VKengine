@@ -1,6 +1,7 @@
 #ifndef _DE_SWAPCHAIN_
 #define _DE_SWAPCHAIN_
 
+#include"DE_RenderPass.hpp"
 
 #include<vulkan/vulkan.hpp>
 #include<vector>
