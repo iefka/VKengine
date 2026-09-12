@@ -6,15 +6,25 @@
 #include "DE_Renderer.hpp"
 
 namespace de {
-	Renderer::Renderer(const Device& device, const RenderPass& renderPass, 
+	Renderer::Renderer(const Device& device, 
 		Window& window, const CommandPool& commandPool,
-		uint32_t minImageCount, uint32_t framesInFlight) :
-		device_{ device }, renderPass_{ renderPass },
-		commandPool_{ commandPool }, window_{ window },
-		minImageCount_{ minImageCount }, framesInFlight_{framesInFlight} {
+		uint32_t minImageCount, uint32_t framesInFlight) 
+		:device_{ device },
+		commandPool_{ commandPool },
+		window_{ window },
+		minImageCount_{ minImageCount }, 
+		framesInFlight_{framesInFlight} {
+
+
+		renderPass_ = std::make_unique<de::RenderPass>(
+			de::RenderPass::Builder{ device_ }
+			.setColorAttachment(window_.getSurfaceFormat().format)
+			.setDepthAttachment(vk::Format::eD32Sfloat)
+			.build()
+		);
 
 		swapchain_.emplace(
-			Swapchain::Builder{ device_,renderPass_ }
+			Swapchain::Builder{ device_,*renderPass_ }
 			.setClipped(true)
 			.setSurface(*window_.getSurface())
 			.setCompositeAlpha(vk::CompositeAlphaFlagBitsKHR::eOpaque)
@@ -77,7 +87,7 @@ namespace de {
 		const auto oldHandle = swapchain_->getHandle();
 
 		swapchain_.emplace(
-			Swapchain::Builder{ device_,renderPass_ }
+			Swapchain::Builder{ device_,*renderPass_ }
 			.setClipped(true)
 			.setSurface(*window_.getSurface())
 			.setCompositeAlpha(vk::CompositeAlphaFlagBitsKHR::eOpaque)
@@ -171,6 +181,22 @@ namespace de {
 			.setMaxDepth(1.f)
 		);
 		frameData.commandBuffer.setScissor(0, vk::Rect2D{ {0,0},extent });
+	}
+	void Renderer::renderFrame(){
+		
+		auto frameOptimal = beginFrame();
+		if (!frameOptimal) { return; }
+		auto& frame = *frameOptimal;
+
+		for (auto& pass : passes_) {
+
+			beginRenderPass(frame, pass->getRenderTarget(), pass->getClearValues());
+			pass->record(frame);
+			endRenderPass(frame);
+		}
+
+		endFrame();
+
 	}
 	void Renderer::endRenderPass(const FrameData& frameData) {
 		if (!isFrameStarted_) {
