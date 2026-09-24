@@ -9,6 +9,11 @@
 #include "Utility/DE_Debug.hpp"
 #include "Utility/DE_Utility.hpp"
 
+#include"third_party/imgui/imgui.h"
+#include"third_party/imgui/backends/imgui_impl_vulkan.h"
+#include"third_party/imgui/backends/imgui_impl_glfw.h"
+
+
 #include <array>
 #include <stdexcept>
 
@@ -35,6 +40,21 @@ float AppTimer::getDeltaTime() {
 }
 
 float AppTimer::getTotalTime() const { return totalTime_; }
+
+
+void FrameCounter::tick(float deltaTime){
+
+	++numFrames_;
+	accumulatedTime_ += deltaTime;
+
+	if (accumulatedTime_ < avgIntervalSec_){return;}
+
+	currentFPS_ = static_cast<float>(
+		numFrames_ / accumulatedTime_
+		);
+	numFrames_ = 0;
+	accumulatedTime_ = 0;
+}
 
 // ============================================================================
 // Application Implementation
@@ -112,13 +132,22 @@ void Application::preparePasses(){
 
 	mainPass_ = std::make_unique<de::MainRenderPass>(*device_,
 		*renderer_,
+		*skyboxSystem_,
 		*renderSystem_,
 		*pointLightSystem_,
 		*controlledCamera_,
 		gameObjects,
 		descriptorLayouts_[0]);
 
+	guiPass_ = std::make_unique<de::GUIRenderPass>(
+		*instance_,
+		*device_,
+		window_,
+		*renderer_
+	);
+
 	renderer_->registerPass(mainPass_.get());
+	renderer_->registerPass(guiPass_.get());
 }
 
 void Application::initGameObjects() {
@@ -190,12 +219,11 @@ void Application::initSystems(){
 	pointLightSystem_ = std::make_unique<de::PointLightSystem>(
 		*device_, renderer_->getMainRenderPass(), window_.getExtent(), descriptorLayouts_
 	);
+	skyboxSystem_ = std::make_unique<de::SkyBoxSystem>(
+		*device_, renderer_->getMainRenderPass(), window_.getExtent(), descriptorLayouts_,
+		*globalPool_, "Materials/Textures/Cubemap_Sky_01.png"
+	);
 }
-
-//void Application::initRenderPass() {
-	
-//}
-
 
 void Application::initRenderer() {
 	renderer_ = 
@@ -211,6 +239,24 @@ void Application::initRenderer() {
 void Application::initCommandPool () {
 	const auto& graphicsQueue = device_->getGraphicsQueue();
 	commandPool_ = std::make_unique<de::CommandPool>(*device_, graphicsQueue.queuFamilyIndex, vk::CommandPoolCreateFlagBits::eResetCommandBuffer);
+}
+
+void Application::drawUI(){
+
+	ImGui_ImplVulkan_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+	
+	//there my ui
+	std::string fps("FPS: " + std::to_string(fpsCounter.getFPS()));
+
+	ImGui::StyleColorsClassic();
+	
+	ImGui::Text(fps.c_str());
+
+	//end
+	ImGui::Render();
+
 }
 
 std::vector<const char*> Application::getRequiredExtensions() {
@@ -239,6 +285,8 @@ std::pair<vk::Viewport, vk::Rect2D> getViewportState(const vk::Extent2D& viewpor
 
 
 void Application::renderFrame() {
+
+	drawUI();
 	renderer_->renderFrame();
 }
 
@@ -266,9 +314,12 @@ void Application::mainLoop() {
 
 		float deltaTime = timer_.getDeltaTime();
 		float totalTime = timer_.getTotalTime();
+
 		handleInputs(deltaTime);
 		updateScene(deltaTime, totalTime);
 		renderFrame();
+		fpsCounter.tick(deltaTime);
+
 	}
 	cleanup();
 }
@@ -291,3 +342,5 @@ void Application::updateScene(float deltaTime, float totalTime) {
 	mainPass_->updateTime(deltaTime, totalTime);
 
 }
+
+

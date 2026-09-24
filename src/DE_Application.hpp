@@ -9,6 +9,7 @@
 #include "DE_Renderer.hpp"
 #include "Systems/DE_RenderSystem.hpp"
 #include"Systems/PointLightSystem.hpp"
+#include"Systems/SkyBoxSystem.hpp"
 #include "DE_CommandBuffers.hpp"
 #include "DE_Descriptors.hpp"
 #include "DE_ControledCamera.hpp"
@@ -18,6 +19,7 @@
 #include"glm_config.hpp"
 #include"MaterialManager.hpp"
 #include"DE_MainRenderPass.hpp"
+#include"DE_Gui.hpp"
 
 
 #include <vector>
@@ -36,6 +38,16 @@ private:
 	std::chrono::steady_clock::time_point lastFrameTime_;
 	float totalTime_{0.0f};
 	float deltaTime_{0.0f};
+};
+class FrameCounter {
+public:
+	void tick(float deltaTime);
+	float getFPS()const noexcept { return currentFPS_; }
+private:
+	constexpr static float avgIntervalSec_{ 0.5f };
+	uint32_t numFrames_{};
+	double accumulatedTime_{};
+	float currentFPS_{};
 };
 
 struct ApplicationConfig {
@@ -71,6 +83,7 @@ private:
 	void preparePasses();
 
 	// helpers
+	void drawUI();
 	std::vector<const char*> getRequiredExtensions();
 	void updateScene(float deltaTime, float totalTime);
 	void renderFrame();
@@ -84,20 +97,23 @@ private:
 	std::unique_ptr<de::Device> device_;
 	de::Window window_;
 	
-
-	// resources
 	std::unique_ptr<de::DescriptorPool> globalPool_;
 	std::vector<de::DescriptorSetLayout> descriptorLayouts_;
 	std::unique_ptr<de::MaterialManager> materialManager_;
 	de::GameObject::Map gameObjects;
-	std::unique_ptr<de::MainRenderPass> mainPass_;
 
+	std::unique_ptr<de::CommandPool> commandPool_;         
+	std::unique_ptr<de::Renderer> renderer_;               
+
+	std::unique_ptr<de::MainRenderPass> mainPass_;
+	std::unique_ptr<de::GUIRenderPass> guiPass_;
 	std::unique_ptr<de::RenderSystem> renderSystem_;
 	std::unique_ptr<de::PointLightSystem> pointLightSystem_;
-	std::unique_ptr<de::CommandPool> commandPool_;
-	std::unique_ptr<de::Renderer> renderer_;
+	std::unique_ptr<de::SkyBoxSystem> skyboxSystem_;
 	std::unique_ptr<de::ControlledCamera> controlledCamera_;
 
+
+	FrameCounter fpsCounter;
 	AppTimer timer_;
 };
 

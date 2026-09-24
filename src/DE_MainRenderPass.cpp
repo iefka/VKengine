@@ -4,6 +4,7 @@
 #include"DE_ControledCamera.hpp"
 #include"DE_Renderer.hpp"
 #include"DE_FrameData.hpp"
+#include"Systems/SkyBoxSystem.hpp"
 #include"Systems/PointLightSystem.hpp"
 #include"Systems/DE_RenderSystem.hpp"
 #include"DE_Swapchain.hpp"
@@ -13,12 +14,14 @@
 namespace de{
 	MainRenderPass::MainRenderPass(const Device& device,
 		Renderer& renderer,
+		SkyBoxSystem& skyboxSystem,
 		RenderSystem& renderSystem,
 		PointLightSystem& pointLightSys,
 		ControlledCamera& camera,
 		GameObject::Map& gameObjects,
 		const DescriptorSetLayout& uboLayout)
 		:renderer_{renderer},
+		skyboxSystem_{skyboxSystem},
 		renderSystem_{renderSystem},
 		pointLightSystem_{pointLightSys},
 		camera_{camera},
@@ -84,8 +87,9 @@ namespace de{
 		const auto extent = renderer_.getSwapchainExtent();
 		const float aspectRatio = static_cast<float>(extent.width) / static_cast<float>(extent.height);
 		currUBO.projectionMatrix = rawCamera.getProjectionMatrix(aspectRatio);
-		currUBO.viewMatrix = rawCamera.getViewMatrix();
-		currUBO.inverceViewMatrix = glm::inverse(currUBO.viewMatrix);
+currUBO.viewMatrix = rawCamera.getViewMatrix();
+currUBO.inverceViewMatrix = glm::inverse(currUBO.viewMatrix);
+currUBO.invViewProjMatrix = glm::inverse(currUBO.projectionMatrix * currUBO.viewMatrix);
 
 		uboBuffers_[frameData.frameIndex]->copyToBuffer(&currUBO, sizeof(GlobalUBO), 0);
 		uboBuffers_[frameData.frameIndex]->flush();
@@ -98,6 +102,7 @@ namespace de{
 			.gameObjects = gameObjects_
 		};
 
+		skyboxSystem_.render(frameInfo);
 		renderSystem_.renderGameObjects(frameInfo);
 		pointLightSystem_.render(frameInfo);
 	}

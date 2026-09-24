@@ -8,6 +8,7 @@ namespace de {
 
 	class RenderSystem;
 	class PointLightSystem;
+	class SkyBoxSystem;
 	class Renderer;
 	class Buffer;
 	class DescriptorPool;
@@ -21,6 +22,7 @@ namespace de {
 	public:
 		MainRenderPass(const Device& device,
 			Renderer& renderer,
+			SkyBoxSystem& skyboxSystem,
 			RenderSystem& renderSystem,
 			PointLightSystem& pointLightSys,
 			ControlledCamera& camera,
@@ -38,6 +40,7 @@ namespace de {
 
 	private:
 
+		SkyBoxSystem& skyboxSystem_;
 		RenderSystem& renderSystem_;
 		PointLightSystem& pointLightSystem_;
 		Renderer& renderer_;
@@ -49,7 +52,7 @@ namespace de {
 		std::vector<std::unique_ptr<Buffer>> uboBuffers_{};
 		std::vector<vk::DescriptorSet> descriptorSets_{};
 
-		float deltaTime_;
-		float totalTime_;
+		float deltaTime_{};
+		float totalTime_{};
 	};
 }
