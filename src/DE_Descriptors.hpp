@@ -73,6 +73,7 @@ namespace de{
 
 		vk::DescriptorSet allocate(const DescriptorSetLayout& descriptorSetLayout) const;
 
+		vk::DescriptorPool getPool() { return *descriptorPool_; }
 
 	private:
 		const Device& device_;

@@ -6,7 +6,7 @@
 #include"DE_RenderPass.hpp"
 #include"DE_FrameData.hpp"
 #include"Material.hpp"
-
+#include"ranges"
 
 namespace de {
 
@@ -23,10 +23,12 @@ namespace de {
 		vertexShader_ = std::make_unique<de::Shader>(device_, "Shaders/bin/vertex.vert.spv");
 		fragmentShader_ = std::make_unique<de::Shader>(device_, "Shaders/bin/fragment.frag.spv");
 		
-		std::vector<vk::DescriptorSetLayout> vkDescriptors(descriptorSetLayouts.size());
-			for (size_t i = 0; i < descriptorSetLayouts.size(); i++){
-				vkDescriptors[i] = descriptorSetLayouts[i].getLayout();
-			}
+		auto vkDescriptors =
+			descriptorSetLayouts
+			| std::views::transform([&](const auto& dsSet) {
+			return dsSet.getLayout();
+				})
+			| std::ranges::to<std::vector>();
 
 		createPipeline(extent, vkDescriptors);
 	}

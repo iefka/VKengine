@@ -40,14 +40,12 @@ namespace de{
 			vk::DeviceSize size) const;
 
 		//layout of copying image must be TransferDstOptimal before usage!
-		void copyBufferToImage(
-			const vk::Buffer& srcBuffer,
-			const vk::Image& dstImage,
-			uint32_t width,
-			uint32_t height) const;
+		void copyBufferToImage(vk::Buffer buffer, vk::Image image,
+			vk::ArrayProxy<const vk::BufferImageCopy> regions) const;
 
 		void transitionImageLayout(vk::Image image, vk::Format format,
-			vk::ImageLayout oldLayout, vk::ImageLayout newLayout) const;
+			vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
+			uint32_t layerCount = 1) const;
 
 		const vk::PhysicalDevice& getPhysicalDevice() const noexcept{ return physicalDevice_; }
 		const vk::Device& getLogicalDevice() const noexcept{ return *uLogicalDevice_; }

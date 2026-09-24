@@ -113,6 +113,7 @@ namespace de {
 		vk::Framebuffer getFrameBuffer(uint32_t imageIndex) const { return *framebuffers_.at(imageIndex); }
 		vk::Extent2D getSwapchainExtent() const noexcept{ return currentExtent_; }
 		vk::RenderPass getRenderPass()const noexcept{return *renderPass_.getRenderPass();}
+		uint32_t getMinImageCount() const noexcept { return minImage_; }
 
 	private:
 		friend class Builder;
@@ -124,7 +125,8 @@ namespace de {
 		vk::Extent2D currentExtent_;
 
 		// per-image real image count
-		std::uint32_t imageCount_;
+		uint32_t minImage_;
+		uint32_t imageCount_;
 		std::vector<vk::UniqueImageView> imageViews_;
 		vk::UniqueImageView depthImageView_;
 		gpuImage depthImage_;

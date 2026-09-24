@@ -34,7 +34,7 @@ namespace de {
 			.setImageExtent(window_.getExtent())
 			.setImageUsage(vk::ImageUsageFlagBits::eColorAttachment)
 			.setMinImageCount(minImageCount_)
-			.setPresentMode(vk::PresentModeKHR::eFifo)
+			.setPresentMode(vk::PresentModeKHR::eMailbox)
 			.setPreTransform(vk::SurfaceTransformFlagBitsKHR::eIdentity)
 			.build()
 		);
@@ -97,7 +97,7 @@ namespace de {
 			.setImageExtent(window_.getExtent())
 			.setImageUsage(vk::ImageUsageFlagBits::eColorAttachment)
 			.setMinImageCount(minImageCount_)
-			.setPresentMode(vk::PresentModeKHR::eFifo)
+			.setPresentMode(vk::PresentModeKHR::eMailbox)
 			.setPreTransform(vk::SurfaceTransformFlagBitsKHR::eIdentity)
 			.setOldSwapchain(oldHandle)
 			.build()

@@ -58,37 +58,18 @@ namespace de{
 		endSingleCommand(commandBuffer);
 	}
 
-	void Device::copyBufferToImage(const vk::Buffer& srcBuffer,
-		const vk::Image& dstImage,
-		uint32_t width, 
-		uint32_t height) const{
+	void Device::copyBufferToImage(vk::Buffer buffer, vk::Image image,
+		vk::ArrayProxy<const vk::BufferImageCopy> regions) const {
+
 		auto cmd = beginSingleCommand();
-
-		const auto& commandBuffer = cmd.handle(0);
-
-		const auto imageSubresource = vk::ImageSubresourceLayers{}
-			.setAspectMask(vk::ImageAspectFlagBits::eColor)
-			.setBaseArrayLayer(0)
-			.setLayerCount(1)
-			.setMipLevel(0);
-
-		const auto region = vk::BufferImageCopy{}
-			.setBufferRowLength(0)
-			.setBufferOffset(0)
-			.setBufferImageHeight(0)
-			.setImageOffset(0)
-			.setImageExtent(vk::Extent3D{ width,height,1 })
-			.setImageSubresource(imageSubresource);
-
-		commandBuffer.copyBufferToImage(srcBuffer, dstImage, vk::ImageLayout::eTransferDstOptimal, region);
-
+		auto commandBuffer = cmd.handle(0);
+		commandBuffer.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, regions);
 		endSingleCommand(commandBuffer);
-
-
 	}
 
 	void Device::transitionImageLayout(vk::Image image, vk::Format format,
-		vk::ImageLayout oldLayout, vk::ImageLayout newLayout) const {
+		vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
+		uint32_t layerCount) const {
 	
 		auto cmd = beginSingleCommand();
 		const auto& commandBuffer = cmd.handle(0);
@@ -98,7 +79,7 @@ namespace de{
 		const auto imageSubresource = vk::ImageSubresourceRange{}
 			.setAspectMask(vk::ImageAspectFlagBits::eColor)
 			.setBaseArrayLayer(0)
-			.setLayerCount(1)
+			.setLayerCount(layerCount)
 			.setBaseMipLevel(0)
 			.setLevelCount(1);
 

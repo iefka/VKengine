@@ -16,6 +16,7 @@ namespace de {
 		glm::mat4 projectionMatrix{ 1.f };
 		glm::mat4 viewMatrix{ 1.f };
 		glm::mat4 inverceViewMatrix{ 1.f };
+		glm::mat4 invViewProjMatrix{ 1.f };
 		glm::vec4 ambientLightColor{ 1.f,1.f,1.f, .02f };
 		pointLight pointLights[MAX_LIGHTS];
 		int numLights;

@@ -78,6 +78,7 @@ namespace de {
 
 		const RenderPass& getMainRenderPass() { return *renderPass_; }
 
+		const Swapchain& getSwapchain()const noexcept { return swapchain_.value(); }
 		vk::Extent2D getSwapchainExtent() const noexcept {return swapchain_->getSwapchainExtent();}
 		uint32_t getFramesInFlight() const noexcept { return framesInFlight_; }
 		bool isFrameInfProgress() const noexcept {return isFrameStarted_;}

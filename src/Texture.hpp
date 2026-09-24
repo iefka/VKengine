@@ -15,9 +15,14 @@ namespace de {
 
 	public:
 
-		Texture(std::string pathToTexture, const Device& device);
+		Texture(std::string pathToTexture,
+			const Device& device,
+			vk::ImageType imgType = vk::ImageType::e2D);
 		Texture(const Device& device, vk::Format textureFormat,
-			void* data, uint32_t width, uint32_t height);
+			void* data, uint32_t width, uint32_t height,
+			vk::ImageType imgType = vk::ImageType::e2D);
+
+		Texture static loadCubemap(const Device& device, std::string pathToTexture);
 
 		~Texture();
 		Texture(const Texture&) = delete;
@@ -30,7 +35,7 @@ namespace de {
 			return *textureImage_;
 		}
 		const vk::ImageView& getImageView() const noexcept {
-			return *textureImageView_;
+			return*textureImageView_;
 		}
 		const vk::Sampler& getSampler() const noexcept {
 			return *textureSampler_;
@@ -46,6 +51,13 @@ namespace de {
 			
 
 	private:
+
+		Texture(const Device& device,
+			vk::Format imgFormat,
+			uint32_t faceWidht,
+			uint32_t faceHeight,
+			const std::array<std::vector<uint8_t>, 6>& facePixels);
+
 		std::unique_ptr<Image> textureImage_;
 		vk::UniqueImageView textureImageView_;
 		vk::UniqueSampler textureSampler_;

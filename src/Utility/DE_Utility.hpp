@@ -11,6 +11,8 @@ namespace de {
 		inline uint32_t getFormatSize(vk::Format format) {
 			switch (format)
 			{
+			case vk::Format::eR8G8B8A8Srgb:
+				return static_cast<uint32_t>(4);
 			case vk::Format::eR8G8B8A8Unorm:
 				return static_cast<uint32_t>(4);
 			case vk::Format::eR32G32B32A32Sfloat:
@@ -45,19 +47,23 @@ namespace de {
 			const vk::Device& logicalDevice,
 			const vk::Image& image,
 			const vk::Format& format,
-			vk::ImageAspectFlagBits imageAspect) {
-
+			vk::ImageAspectFlagBits imageAspect,
+			vk::ImageViewType viewType = vk::ImageViewType::e2D,
+			uint32_t layerCount = 1,
+			uint32_t baseArrayLayer = 0,
+			uint32_t mipLevels = 1,
+			uint32_t baseMipLevel = 0) {
 
 			const auto subresourceRange = vk::ImageSubresourceRange{}
 				.setAspectMask(imageAspect)
-				.setBaseMipLevel(0)
-				.setLevelCount(1)
-				.setBaseArrayLayer(0)
-				.setLayerCount(1);
+				.setBaseMipLevel(baseMipLevel)
+				.setLevelCount(mipLevels)
+				.setBaseArrayLayer(baseArrayLayer)
+				.setLayerCount(layerCount);
 
 			const auto imageInfo = vk::ImageViewCreateInfo{}
 				.setImage(image)
-				.setViewType(vk::ImageViewType::e2D)
+				.setViewType(viewType)
 				.setFormat(format)
 				.setSubresourceRange(subresourceRange);
 

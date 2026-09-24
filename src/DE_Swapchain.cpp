@@ -94,6 +94,7 @@ namespace de {
 		framebuffers_ = createFramebuffers(device_, imageViews_, depthImageView_, scInfo.imageExtent, *renderPass.getRenderPass());
 
 		//real images count
+		minImage_ = scInfo.minImageCount;
 		imageCount_ = static_cast<std::uint32_t>(imageViews_.size());
 
 

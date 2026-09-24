@@ -80,6 +80,7 @@ source_group(TREE "${CMAKE_SOURCE_DIR}/src" FILES ${VULKAN_TUTORIAL_SOURCES} ${V
 
 target_include_directories(vulkan_tutorial PRIVATE
     ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/third_party/imgui
     ${Vulkan_INCLUDE_DIRS}
 )
 

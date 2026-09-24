@@ -5,6 +5,7 @@
 #include"DE_RenderPass.hpp"
 #include"DE_FrameData.hpp"
 
+#include<ranges>
 
 namespace de {
 
@@ -14,15 +15,17 @@ namespace de {
 		std::vector<DescriptorSetLayout>& descriptorSetLayouts) :
 		device_{ device },
 		renderPass_{ renderPass },
-		extent_{ extent } 
+		extent_{ extent }
 	{
 		vertexShader_ = std::make_unique<de::Shader>(device_, "Shaders/bin/point_light.vert.spv");
 		fragmentShader_ = std::make_unique<de::Shader>(device_, "Shaders/bin/point_light.frag.spv");
 
-		std::vector<vk::DescriptorSetLayout> vkDescriptors(descriptorSetLayouts.size());
-		for (size_t i = 0; i < descriptorSetLayouts.size(); i++) {
-			vkDescriptors[i] = descriptorSetLayouts[i].getLayout();
-		}
+		auto vkDescriptors =
+			descriptorSetLayouts
+			| std::views::transform([](const auto& dsSet) {
+			return dsSet.getLayout();
+				})
+			| std::ranges::to<std::vector>();
 
 		createPipeline(extent, vkDescriptors);
 	}
