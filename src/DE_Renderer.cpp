@@ -190,6 +190,7 @@ namespace de {
 
 		for (auto& pass : passes_) {
 
+			pass->preRecord(frame);
 			beginRenderPass(frame, pass->getRenderTarget(), pass->getClearValues());
 			pass->record(frame);
 			endRenderPass(frame);

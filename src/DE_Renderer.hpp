@@ -74,7 +74,7 @@ namespace de {
 			passes_.erase(removed.begin(), removed.end());
 		}
 
-		RenderTarget& getSwapchainRenderTarget() noexcept { return swapchainTarget_; }
+		const RenderTarget& getSwapchainRenderTarget() const noexcept  { return swapchainTarget_; }
 
 		const RenderPass& getMainRenderPass() { return *renderPass_; }
 
