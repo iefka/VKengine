@@ -146,8 +146,17 @@ void Application::preparePasses(){
 		*renderer_
 	);
 
+#if 0
+	shaderTexturingPass_ = std::make_unique<de::ShaderTexturingPass>(*device_,
+		window_.getExtent(), renderer_->getMainRenderPass(),
+		*renderer_, "Shaders/bin/compute.comp.spv");
+
+	renderer_->registerPass(shaderTexturingPass_.get());
+#endif
+
 	renderer_->registerPass(mainPass_.get());
 	renderer_->registerPass(guiPass_.get());
+
 }
 
 void Application::initGameObjects() {
@@ -338,6 +347,7 @@ void Application::handleInputs(float deltaTime) {
 
 void Application::updateScene(float deltaTime, float totalTime) {
 	
+	shaderTexturingPass_->updateTime(totalTime);
 	controlledCamera_->updateCamera(deltaTime);
 	mainPass_->updateTime(deltaTime, totalTime);
 

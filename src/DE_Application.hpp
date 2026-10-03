@@ -14,6 +14,7 @@
 #include "DE_Descriptors.hpp"
 #include "DE_ControledCamera.hpp"
 #include"DE_GameObject.hpp"
+#include"Experements/DE_ShaderTexturingPass.hpp"
 #include "Utility/DE_Debug.hpp"
 #include "Utility/DE_Utility.hpp"
 #include"glm_config.hpp"
@@ -105,6 +106,7 @@ private:
 	std::unique_ptr<de::CommandPool> commandPool_;         
 	std::unique_ptr<de::Renderer> renderer_;               
 
+	std::unique_ptr<de::ShaderTexturingPass> shaderTexturingPass_;
 	std::unique_ptr<de::MainRenderPass> mainPass_;
 	std::unique_ptr<de::GUIRenderPass> guiPass_;
 	std::unique_ptr<de::RenderSystem> renderSystem_;
