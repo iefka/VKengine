@@ -8,30 +8,7 @@
 #include<ranges>
 
 namespace de {
-	vk::UniqueSampler createTextureSampler(const vk::Device& logicalDevice,
-		vk::SamplerAddressMode addressMode = vk::SamplerAddressMode::eRepeat,
-		bool anisotropyEnable = true,
-		float maxAnisotropy = 4.0f) {
-
-		const auto samplerInfo = vk::SamplerCreateInfo{}
-			.setAddressModeU(addressMode)
-			.setAddressModeV(addressMode)
-			.setAddressModeW(addressMode)
-			.setMagFilter(vk::Filter::eLinear)
-			.setMinFilter(vk::Filter::eLinear)
-			.setAnisotropyEnable(anisotropyEnable)
-			.setMaxAnisotropy(maxAnisotropy)
-			.setBorderColor(vk::BorderColor::eIntOpaqueBlack)
-			.setUnnormalizedCoordinates(vk::False)
-			.setCompareEnable(vk::False)
-			.setCompareOp(vk::CompareOp::eAlways)
-			.setMipmapMode(vk::SamplerMipmapMode::eLinear)
-			.setMipLodBias(0.f)
-			.setMinLod(0.f)
-			.setMaxLod(0.f);
-
-		return logicalDevice.createSamplerUnique(samplerInfo);
-	}
+	
 
 	Texture::~Texture() = default;
 	Texture::Texture(std::string pathToTexture,
@@ -106,7 +83,7 @@ namespace de {
 		textureImageView_ = utl::createImageView(device.getLogicalDevice(), textureImage_->getImage(),
 			textureFormat, vk::ImageAspectFlagBits::eColor);
 
-		textureSampler_ = createTextureSampler(device.getLogicalDevice());
+		textureSampler_ = utl::createTextureSampler(device.getLogicalDevice());
 
 	}
 
@@ -174,7 +151,7 @@ namespace de {
 		textureImageView_ = utl::createImageView(device.getLogicalDevice(), textureImage_->getImage(),
 			textureFormat, vk::ImageAspectFlagBits::eColor);
 
-		textureSampler_ = createTextureSampler(device.getLogicalDevice());
+		textureSampler_ = utl::createTextureSampler(device.getLogicalDevice());
 	}
 
 
@@ -321,7 +298,7 @@ namespace de {
 		textureImageView_ = utl::createImageView(device.getLogicalDevice(), textureImage_->getImage(),
 			imgFormat, vk::ImageAspectFlagBits::eColor,vk::ImageViewType::eCube,faceCount);
 
-		textureSampler_ = createTextureSampler(device.getLogicalDevice(),
+		textureSampler_ = utl::createTextureSampler(device.getLogicalDevice(),
 			vk::SamplerAddressMode::eClampToEdge,
 			false);
 

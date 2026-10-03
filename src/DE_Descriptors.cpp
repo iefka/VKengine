@@ -67,7 +67,7 @@ namespace de{
 		DescriptorSetLayout::Builder&
 			DescriptorSetLayout::Builder::addBinding(uint32_t binding,
 				vk::DescriptorType descriptorType,
-				vk::ShaderStageFlagBits stageFlag, uint32_t count){
+				vk::ShaderStageFlags stageFlag, uint32_t count){
 
 			if (bindings_.count(binding) != 0) {
 				throw std::runtime_error("Binding already added");

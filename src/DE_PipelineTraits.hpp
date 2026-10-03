@@ -23,8 +23,19 @@ namespace de{
                 return *this;
             }
 
+            Builder& addDsLayout(vk::DescriptorSetLayout layout) noexcept {
+                dsLayouts_.push_back(layout);
+                return *this;
+            }
+
+            Builder& setPushConstantRanges(const std::vector<vk::PushConstantRange>& ranges) noexcept {
+                pushConstantRanges_ = ranges;
+                return *this;
+            }
+
             // geters
-           
+            const std::vector<vk::DescriptorSetLayout>& getDsLayouts() const noexcept { return dsLayouts_; }
+            const std::vector<vk::PushConstantRange>& getPushConstantRanges() const noexcept { return pushConstantRanges_; }
             const vk::PipelineShaderStageCreateInfo& getShaderStage() const noexcept{ return shaderStage_; }
 
         private:

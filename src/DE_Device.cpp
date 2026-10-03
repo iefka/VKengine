@@ -103,6 +103,13 @@ namespace de{
 
 			 sourceStage = vk::PipelineStageFlagBits::eTransfer;
 			 destenationStage = vk::PipelineStageFlagBits::eFragmentShader;
+		 }
+		 else if (oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eGeneral) {
+			 imageBarier.srcAccessMask = {};
+			 imageBarier.dstAccessMask = vk::AccessFlagBits::eShaderWrite;
+
+			 sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+			 destenationStage = vk::PipelineStageFlagBits::eFragmentShader;
 		 }else {
 			 throw std::runtime_error("unsuported image layout transition");
 		 }

@@ -31,6 +31,7 @@ namespace de {
 			| std::ranges::to<std::vector>();
 
 		createPipeline(extent, vkDescriptors);
+
 	}
 
 	void RenderSystem::renderGameObjects(const FrameInfo& frameInfo){
@@ -56,7 +57,7 @@ namespace de {
 
 			pushData.normalMatrix = object.transform.normalMatrix();
 			pushData.modelMatrix = object.transform.mat4();
-			
+
 			pushConstant_.setValue(pushData);
 			pushConstant_.push(frameInfo.commandBuffer, *graphicsPipeline_->getLayout());
 			object.model->bind(frameInfo.commandBuffer);

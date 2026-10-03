@@ -5,6 +5,7 @@
 #include<vector>
 #include<unordered_map>
 
+
 namespace de{
 	class Device;
 
@@ -15,7 +16,7 @@ namespace de{
 			explicit Builder(const Device& device);
 			Builder& addBinding(uint32_t binding,
 				vk::DescriptorType descriptorType,
-				vk::ShaderStageFlagBits stageFlag, uint32_t count = 1 );
+				vk::ShaderStageFlags stageFlag, uint32_t count = 1 );
 
 			DescriptorSetLayout build();
 		private:
