@@ -70,6 +70,30 @@ namespace de {
 			return logicalDevice.createImageViewUnique(imageInfo);
 		}
 
+		inline vk::UniqueSampler createTextureSampler(const vk::Device& logicalDevice,
+			vk::SamplerAddressMode addressMode = vk::SamplerAddressMode::eRepeat,
+			bool anisotropyEnable = true,
+			float maxAnisotropy = 4.0f) {
+
+			const auto samplerInfo = vk::SamplerCreateInfo{}
+				.setAddressModeU(addressMode)
+				.setAddressModeV(addressMode)
+				.setAddressModeW(addressMode)
+				.setMagFilter(vk::Filter::eLinear)
+				.setMinFilter(vk::Filter::eLinear)
+				.setAnisotropyEnable(anisotropyEnable)
+				.setMaxAnisotropy(maxAnisotropy)
+				.setBorderColor(vk::BorderColor::eIntOpaqueBlack)
+				.setUnnormalizedCoordinates(vk::False)
+				.setCompareEnable(vk::False)
+				.setCompareOp(vk::CompareOp::eAlways)
+				.setMipmapMode(vk::SamplerMipmapMode::eLinear)
+				.setMipLodBias(0.f)
+				.setMinLod(0.f)
+				.setMaxLod(0.f);
+
+			return logicalDevice.createSamplerUnique(samplerInfo);
+		}
 	}
 }
 #endif // !_DE_UTILITY_
