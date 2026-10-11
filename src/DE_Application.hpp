@@ -106,7 +106,9 @@ private:
 	std::unique_ptr<de::CommandPool> commandPool_;         
 	std::unique_ptr<de::Renderer> renderer_;               
 
+#if 0
 	std::unique_ptr<de::ShaderTexturingPass> shaderTexturingPass_;
+#endif
 	std::unique_ptr<de::MainRenderPass> mainPass_;
 	std::unique_ptr<de::GUIRenderPass> guiPass_;
 	std::unique_ptr<de::RenderSystem> renderSystem_;

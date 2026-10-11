@@ -346,8 +346,9 @@ void Application::handleInputs(float deltaTime) {
 }
 
 void Application::updateScene(float deltaTime, float totalTime) {
-	
+#if 0
 	shaderTexturingPass_->updateTime(totalTime);
+#endif
 	controlledCamera_->updateCamera(deltaTime);
 	mainPass_->updateTime(deltaTime, totalTime);
 

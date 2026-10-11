@@ -33,7 +33,7 @@ set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
     tinyobjloader
     GIT_REPOSITORY https://github.com/tinyobjloader/tinyobjloader.git
-    GIT_TAG        v2.0.0rc13
+    GIT_TAG          45636bdcef1a4fec140346b90c0b50bf0bc3e23b #2026-06-19
 )
 
 FetchContent_MakeAvailable(glm glfw tinyobjloader)
