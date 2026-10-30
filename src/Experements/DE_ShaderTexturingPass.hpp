@@ -1,74 +1,76 @@
-#pragma once
+#ifndef _DE_COMPUTE_TEXTURE_TARGET_
+#define _DE_COMPUTE_TEXTURE_TARGET_
 
-#include "DE_IRenderPass.hpp"
-#include<memory>
-#include"DE_PushConstants.hpp"
-#include"DE_RenderTarget.hpp"
-#include<filesystem>
+#include <vulkan/vulkan.hpp>
+#include <vector>
+#include <memory>
+#include <filesystem>
+
+#include "DE_IComputeStep.hpp"
+#include "DE_PushConstants.hpp"
+#include "DE_ITextureSource.hpp"
 
 namespace de {
 
-	class Device;
-	class Renderer;
-	class Image;
-	class Shader;
-	class DescriptorSetLayout;
-	class DescriptorPool;
-	struct ComputeTag;
-	struct GraphicsTag;
-	template <typename Tag> class Pipeline;
-	using ComputePipeline = Pipeline<ComputeTag>;
-	using GraphicsPipeline = Pipeline<GraphicsTag>;
+    class Device;
+    class Image;
+    class Shader;
+    class DescriptorSetLayout;
+    class DescriptorPool;
+    struct ComputeTag;
+    template <typename Tag> class Pipeline;
+    using ComputePipeline = Pipeline<ComputeTag>;
 
-	struct ShaderTexturingPush{
-		float pcTime;
-	};
-
-	class ShaderTexturingPass final : public IRenderPass{
-	public:
-		ShaderTexturingPass(const Device& device,
-			vk::Extent2D extent,
-			const RenderPass& renderPass,
-			const Renderer& renderer,
-			const std::filesystem::path& computeShaderPath);
-		~ShaderTexturingPass();
+    struct ComputeTextureTargetPush {
+        float pcTime;
+    };
 
 
-		void updateTime(float deltaTime);
-		std::vector<vk::ClearValue> getClearValues()  const override;
-		const RenderTarget& getRenderTarget() const override;
-		void preRecord(const FrameData& frameData) override;
-		void record(const FrameData& frameData) override;
-		void onSwapchainRecreation(const Swapchain& sc) override;
+    class ComputeTextureTarget final : public IComputeStep {
+    public:
+        ComputeTextureTarget(const Device& device,
+            vk::Extent2D extent,
+            uint32_t framesInFlight,
+            const std::filesystem::path& computeShaderPath);
+        ~ComputeTextureTarget();
 
-	private:
+        ComputeTextureTarget(const ComputeTextureTarget&) = delete;
+        ComputeTextureTarget& operator=(const ComputeTextureTarget&) = delete;
 
-		void createPipelines(vk::Extent2D extent);
+        void updateTime(float totalTime);
 
-		const Device& device_;
-		const Renderer& renderer_;
-		const RenderPass& renderPass_;
-		vk::Extent2D extent_;
+        void dispatch(vk::CommandBuffer commandBuffer, uint32_t frameIndex) override;
 
-		std::unique_ptr<ComputePipeline> computePipeline_;
-		std::unique_ptr<GraphicsPipeline> graphicsPipeline_;
+        const ITextureSource& getTextureSource(uint32_t frameIndex) const;
 
-		std::unique_ptr<Image> computeImage_;
-		vk::UniqueImageView computeImageView_;
-		vk::UniqueSampler computeImageSampler_;
+        uint32_t getFramesInFlight() const noexcept { return framesInFlight_; }
 
-		std::unique_ptr<DescriptorSetLayout> computeDescriptorLayout_;
-		std::unique_ptr<DescriptorSetLayout> graphicsDescriptorLayout_;
-		std::unique_ptr<DescriptorPool> descriptorPool_;
-		vk::DescriptorSet computeDescriptor_;
-		vk::DescriptorSet graphicsDescriptor_;
+    private:
+        void createPipeline();
 
-		std::unique_ptr<Shader> vertexShader_;
-		std::unique_ptr<Shader> fragmentShader_;
-		std::unique_ptr<Shader> computeShader_;
+        const Device& device_;
+        vk::Extent2D extent_;
+        uint32_t framesInFlight_;
 
-		ShaderTexturingPush pushConstantData_;
-		PushConstant<ShaderTexturingPush> pushConstant_{vk::ShaderStageFlagBits::eCompute};
+        std::unique_ptr<Shader> computeShader_;
+        std::unique_ptr<ComputePipeline> computePipeline_;
+        std::unique_ptr<DescriptorSetLayout> descriptorLayout_;
+        std::unique_ptr<DescriptorPool> descriptorPool_;
 
-	};
+        vk::UniqueSampler sampler_;
+
+        struct FrameSlot {
+            std::unique_ptr<Image> image;
+            vk::UniqueImageView view;
+            vk::DescriptorSet descriptorSet;
+            std::unique_ptr<ComputeTextureView> textureSource;
+        };
+        std::vector<FrameSlot> slots_;
+
+        ComputeTextureTargetPush pushConstantData_{};
+        PushConstant<ComputeTextureTargetPush> pushConstant_{ vk::ShaderStageFlagBits::eCompute };
+    };
+
 }
+
+#endif

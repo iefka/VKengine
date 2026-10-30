@@ -12,7 +12,7 @@ namespace de {
 	PointLightSystem::PointLightSystem(const Device& device,
 		const RenderPass& renderPass,
 		const vk::Extent2D extent,
-		std::vector<DescriptorSetLayout>& descriptorSetLayouts) :
+		std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts) :
 		device_{ device },
 		renderPass_{ renderPass },
 		extent_{ extent }
@@ -20,14 +20,7 @@ namespace de {
 		vertexShader_ = std::make_unique<de::Shader>(device_, "Shaders/bin/point_light.vert.spv");
 		fragmentShader_ = std::make_unique<de::Shader>(device_, "Shaders/bin/point_light.frag.spv");
 
-		auto vkDescriptors =
-			descriptorSetLayouts
-			| std::views::transform([](const auto& dsSet) {
-			return dsSet.getLayout();
-				})
-			| std::ranges::to<std::vector>();
-
-		createPipeline(extent, vkDescriptors);
+		createPipeline(extent, descriptorSetLayouts);
 	}
 
 	void PointLightSystem::update(GameObject::Map& gameObjects, GlobalUBO& ubo, float deltaTime,float totalTime){

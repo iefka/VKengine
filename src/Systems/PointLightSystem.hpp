@@ -28,7 +28,7 @@ namespace de {
 		PointLightSystem(const Device& device,
 			const RenderPass& renderPass,
 			const vk::Extent2D extent,
-			std::vector<DescriptorSetLayout>& descriptorSetLayouts);
+			std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts);
 
 		void update(GameObject::Map& gameObjects, GlobalUBO& ubo, float deltaTime, float totalTime);
 		void render(const FrameInfo& frameInfo);

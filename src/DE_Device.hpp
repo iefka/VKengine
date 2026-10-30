@@ -5,10 +5,12 @@
 //std
 #include<vector>
 #include<exception>
+#include<utility>
 #include<optional>
 //vk
 #include<vulkan/vulkan.hpp>
 
+#include "DE_CommandBuffers.hpp"
 
 struct QueueFamily{
 	uint32_t queuFamilyIndex = UINT32_MAX;
@@ -45,7 +47,14 @@ namespace de{
 
 		void transitionImageLayout(vk::Image image, vk::Format format,
 			vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
-			uint32_t layerCount = 1) const;
+			uint32_t layerCount = 1, uint32_t mipLevelCount = 0) const;
+
+		template <typename F>
+		void executeSingleCommand(F&& recordCommands) const {
+			auto cmd = beginSingleCommand();
+			std::forward<F>(recordCommands)(cmd.handle(0));
+			endSingleCommand(cmd.handle(0));
+		}
 
 		const vk::PhysicalDevice& getPhysicalDevice() const noexcept{ return physicalDevice_; }
 		const vk::Device& getLogicalDevice() const noexcept{ return *uLogicalDevice_; }

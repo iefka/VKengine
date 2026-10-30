@@ -1,3 +1,4 @@
+#if MODEL
 #ifndef _DE_MODEL_
 #define _DE_MODEL_
 
@@ -66,4 +67,5 @@ namespace de {
 	};
 }
 
+#endif
 #endif

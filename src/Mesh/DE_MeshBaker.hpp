@@ -9,7 +9,11 @@ namespace de {
 	struct MaterialRecord {
 		std::array<char, 64> name{};
 		std::array<char, 128> diffuseTexturePath{};
+		std::array<char, 128> normalTexturePath{};
 		glm::vec3 diffuseColor{ 0.6f, 0.6f, 0.6f };
+		glm::vec3 specularColor{ 1.f,1.f,1.f };
+		float dissolve{ 1.f };
+		float shininess{ 1.f };
 	};
 
 	struct BakedMesh {

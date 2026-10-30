@@ -2,7 +2,6 @@
 #include<algorithm>
 #include<unordered_map>
 //my
-#include"DE_CommandBuffers.hpp"
 #include"DE_Instance.hpp"
 #include "DE_Device.hpp"
 
@@ -69,7 +68,7 @@ namespace de{
 
 	void Device::transitionImageLayout(vk::Image image, vk::Format format,
 		vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
-		uint32_t layerCount) const {
+		uint32_t layerCount,uint32_t mipLevelCount) const {
 	
 		auto cmd = beginSingleCommand();
 		const auto& commandBuffer = cmd.handle(0);
@@ -80,6 +79,7 @@ namespace de{
 			.setAspectMask(vk::ImageAspectFlagBits::eColor)
 			.setBaseArrayLayer(0)
 			.setLayerCount(layerCount)
+			.setLevelCount(mipLevelCount)
 			.setBaseMipLevel(0)
 			.setLevelCount(1);
 
@@ -209,20 +209,46 @@ namespace de{
 			);
 		}
 		
-		using FeaturesChain = vk::StructureChain <vk::PhysicalDeviceFeatures2>;
+		using FeaturesChain = vk::StructureChain < 
+			vk::PhysicalDeviceFeatures2,
+			vk::PhysicalDeviceVulkan12Features> ;
 		FeaturesChain featuresChainCheck;
 		FeaturesChain featuresChainEnable;
 
-		physicalDevice_.getFeatures2(&featuresChainCheck.get<vk::PhysicalDeviceFeatures2>());
+		physicalDevice_.getFeatures2(&featuresChainCheck.get());
 
 		if (featuresChainCheck.get<vk::PhysicalDeviceFeatures2>().features.samplerAnisotropy == false) {
-			throw std::runtime_error("anisontropy feture is not suported");
+			throw std::runtime_error("anisontropy feature is not suported");
+		}
+		if (featuresChainCheck.get<vk::PhysicalDeviceFeatures2>().features.multiDrawIndirect == false) {
+			throw std::runtime_error("multiDrawIndirect feature is not suported");
+		}
+		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan12Features>().shaderSampledImageArrayNonUniformIndexing == false) {
+			throw std::runtime_error("shaderSampledImageArrayNonUniformIndexing feature is not suported");
+		}
+		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingPartiallyBound == false) {
+			throw std::runtime_error("descriptorBindingPartiallyBound feature is not suported");
+		}
+		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan12Features>().runtimeDescriptorArray == false) {
+			throw std::runtime_error("runtimeDescriptorArray feature is not suported");
+		}
+		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingVariableDescriptorCount == false) {
+			throw std::runtime_error("descriptorBindingVariableDescriptorCount feature is not suported");
+		}
+		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingSampledImageUpdateAfterBind == false) {
+			throw std::runtime_error("descriptorBindingSampledImageUpdateAfterBind feature is not suported");
 		}
 
-		featuresChainEnable.get<vk::PhysicalDeviceFeatures2>().features.samplerAnisotropy = true;
-
+		featuresChainEnable.get<vk::PhysicalDeviceFeatures2>().features.samplerAnisotropy = vk::True;
+		featuresChainEnable.get<vk::PhysicalDeviceFeatures2>().features.multiDrawIndirect = vk::True;
+		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().shaderSampledImageArrayNonUniformIndexing = vk::True;
+		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingPartiallyBound = vk::True;
+		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().runtimeDescriptorArray = vk::True;
+		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingVariableDescriptorCount = vk::True;
+		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingSampledImageUpdateAfterBind = vk::True;
+		
 		const auto deviceCreateInfo = vk::DeviceCreateInfo{}
-			.setPNext(&featuresChainEnable)
+			.setPNext(&featuresChainEnable.get<vk::PhysicalDeviceFeatures2>())
 			.setQueueCreateInfos(queueCreateInfos)
 			.setPEnabledExtensionNames(extensions_)
 			.setPEnabledLayerNames(layers_);

@@ -29,7 +29,7 @@ namespace de {
 		SkyBoxSystem(const Device& device,
 			const RenderPass& renderPass,
 			const vk::Extent2D extent,
-			std::vector<DescriptorSetLayout>& descriptorSetLayouts,
+			std::vector<vk::DescriptorSetLayout> descriptorSetLayouts,
 			const DescriptorPool& descriptorPool,
 			std::string texturePath);
 
@@ -43,6 +43,7 @@ namespace de {
 		const RenderPass& renderPass_;
 		vk::Extent2D extent_;
 
+		std::unique_ptr<de::DescriptorSetLayout> cubemapLayout_;
 		vk::DescriptorSet cubemapDescriptor_;
 		std::unique_ptr<GraphicsPipeline> graphicsPipeline_ = nullptr;
 		std::unique_ptr<Shader> vertexShader_ = nullptr;

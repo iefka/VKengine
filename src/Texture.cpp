@@ -5,22 +5,182 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "third_party/stb_image.h"
+
+#include<algorithm>
 #include<ranges>
+#include<cmath>
+#include<array>
+#include<stdexcept>
+#include<cstdint>
 
 namespace de {
 	
+	namespace {
+		uint32_t calculateMipLevels(uint32_t texWidth, uint32_t texHeight) {
+			return static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
+		}
+
+		void generateMipmaps(const Device& device, vk::Image image,
+			vk::Format format, int texWidth, int texHeight, uint32_t mipLevels) {
+
+			if (mipLevels == 0) {
+				return;
+			}
+
+			if (mipLevels > 1) {
+				const auto formatProperties = device.getPhysicalDevice().getFormatProperties(format);
+				if (!(formatProperties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eSampledImageFilterLinear)) {
+					std::runtime_error("generateMipmaps: format dosent support linear blit filtering");
+				}
+			}
+
+			device.executeSingleCommand([&](vk::CommandBuffer commandBuffer){
+				
+				int32_t mipWidth = texWidth;
+				int32_t mipHeight = texHeight;
+
+				for (uint32_t i = 1; i < mipLevels; i++) {
+
+					const int32_t nextMipWidth = std::max(mipWidth / 2, 1);
+					const int32_t nextMipHeight = std::max(mipHeight / 2, 1);
+
+					const auto srcReadyBarrier = vk::ImageMemoryBarrier{}
+						.setImage(image)
+						.setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
+						.setDstQueueFamilyIndex(vk::QueueFamilyIgnored)
+						.setOldLayout(vk::ImageLayout::eTransferDstOptimal)
+						.setNewLayout(vk::ImageLayout::eTransferSrcOptimal)
+						.setSrcAccessMask(vk::AccessFlagBits::eTransferWrite)
+						.setDstAccessMask(vk::AccessFlagBits::eTransferRead)
+						.setSubresourceRange(
+							vk::ImageSubresourceRange{}
+							.setAspectMask(vk::ImageAspectFlagBits::eColor)
+							.setBaseMipLevel(i - 1)
+							.setBaseArrayLayer(0)
+							.setLayerCount(1)
+							.setLevelCount(1)
+						);
+
+					const auto dstReadyBarrier = vk::ImageMemoryBarrier{}
+						.setImage(image)
+						.setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
+						.setDstQueueFamilyIndex(vk::QueueFamilyIgnored)
+						.setOldLayout(vk::ImageLayout::eUndefined)
+						.setNewLayout(vk::ImageLayout::eTransferDstOptimal)
+						.setSrcAccessMask(vk::AccessFlagBits::eNone)
+						.setDstAccessMask(vk::AccessFlagBits::eTransferWrite)
+						.setSubresourceRange(
+							vk::ImageSubresourceRange{}
+							.setAspectMask(vk::ImageAspectFlagBits::eColor)
+							.setBaseMipLevel(i)
+							.setBaseArrayLayer(0)
+							.setLayerCount(1)
+							.setLevelCount(1)
+						);
+
+					commandBuffer.pipelineBarrier(
+						vk::PipelineStageFlagBits::eTransfer,
+						vk::PipelineStageFlagBits::eTransfer,
+						vk::DependencyFlags{},
+						nullptr, nullptr,
+						std::array{ srcReadyBarrier,dstReadyBarrier });
+
+					const auto blit = vk::ImageBlit{}
+						.setSrcOffsets({ vk::Offset3D(0,0,0), vk::Offset3D(mipWidth,mipHeight,1) })
+						.setSrcSubresource(
+							vk::ImageSubresourceLayers{}
+							.setAspectMask(vk::ImageAspectFlagBits::eColor)
+							.setBaseArrayLayer(0)
+							.setLayerCount(1)
+							.setMipLevel(i - 1)
+						)
+						.setDstOffsets({ vk::Offset3D(0,0,0), vk::Offset3D(nextMipWidth,nextMipHeight,1) })
+						.setDstSubresource(
+							vk::ImageSubresourceLayers{}
+							.setAspectMask(vk::ImageAspectFlagBits::eColor)
+							.setBaseArrayLayer(0)
+							.setLayerCount(1)
+							.setMipLevel(i)
+						);
+
+					commandBuffer.blitImage(
+						image, vk::ImageLayout::eTransferSrcOptimal,
+						image, vk::ImageLayout::eTransferDstOptimal,
+						blit, vk::Filter::eLinear);
+					
+					const auto srcDoneBarrier = vk::ImageMemoryBarrier{}
+						.setImage(image)
+						.setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
+						.setDstQueueFamilyIndex(vk::QueueFamilyIgnored)
+						.setOldLayout(vk::ImageLayout::eTransferSrcOptimal)
+						.setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+						.setSrcAccessMask(vk::AccessFlagBits::eTransferRead)
+						.setDstAccessMask(vk::AccessFlagBits::eShaderRead)
+						.setSubresourceRange(
+							vk::ImageSubresourceRange{}
+							.setAspectMask(vk::ImageAspectFlagBits::eColor)
+							.setBaseMipLevel(i - 1)
+							.setBaseArrayLayer(0)
+							.setLayerCount(1)
+							.setLevelCount(1)
+						);
+
+					commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
+						vk::PipelineStageFlagBits::eFragmentShader, {},
+						nullptr, nullptr, srcDoneBarrier);
+
+					mipWidth = nextMipWidth;
+					mipHeight = nextMipHeight;
+				}
+			
+				const auto lastLevelBarrier = vk::ImageMemoryBarrier{}
+					.setImage(image)
+					.setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
+					.setDstQueueFamilyIndex(vk::QueueFamilyIgnored)
+					.setOldLayout(vk::ImageLayout::eTransferDstOptimal)
+					.setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+					.setSrcAccessMask(vk::AccessFlagBits::eTransferWrite)
+					.setDstAccessMask(vk::AccessFlagBits::eShaderRead)
+					.setSubresourceRange(
+						vk::ImageSubresourceRange{}
+						.setAspectMask(vk::ImageAspectFlagBits::eColor)
+						.setBaseMipLevel(mipLevels - 1)
+						.setBaseArrayLayer(0)
+						.setLayerCount(1)
+						.setLevelCount(1)
+					);
+				commandBuffer.pipelineBarrier(
+					vk::PipelineStageFlagBits::eTransfer,
+					vk::PipelineStageFlagBits::eFragmentShader,
+					vk::DependencyFlags{},
+					nullptr, nullptr, lastLevelBarrier
+				);
+			});
+		}
+	}
 
 	Texture::~Texture() = default;
 	Texture::Texture(std::string pathToTexture,
 		const Device& device,
+		vk::Format textureFormat,
+		vk::SamplerAddressMode addressMode,
+		bool enableAnisotropy,
 		vk::ImageType imgType) {
+
+		if (pathToTexture.empty()) {
+			throw std::runtime_error(
+				"Texture: empty path to texture file - caller should have used "
+				"the default material/texture instead of calling this constructor "
+				"with an empty diffuse/normal texname");
+		}
 
 		int texWidth{}, texHeight{}, texChannels{};
 
-		vk::Format textureFormat = vk::Format::eR8G8B8A8Srgb;
 		stbi_uc* pixels = stbi_load(pathToTexture.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 
-		// RGBA -  1byte for each color so 4 bytes per pixel
+		uint32_t mipLevels = calculateMipLevels(static_cast<uint32_t>(texWidth),
+			static_cast<uint32_t>(texHeight));
+
 		vk::DeviceSize imageSize = texWidth * texHeight * 4;
 		if (!pixels) {
 			throw std::runtime_error("texture data is nullptr");
@@ -49,10 +209,12 @@ namespace de {
 				static_cast<uint32_t>(texWidth),
 				static_cast<uint32_t>(texHeight),
 				1})
-			.setMipLevels(1)
+			.setMipLevels(mipLevels)
 			.setArrayLayers(1)
 			.setTiling(vk::ImageTiling::eOptimal)
-			.setUsage(vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled)
+			.setUsage(vk::ImageUsageFlagBits::eTransferSrc
+				|vk::ImageUsageFlagBits::eTransferDst 
+				| vk::ImageUsageFlagBits::eSampled)
 			.setInitialLayout(vk::ImageLayout::eUndefined)
 			.setSamples(vk::SampleCountFlagBits::e1)
 			.setSharingMode(vk::SharingMode::eExclusive),
@@ -73,24 +235,26 @@ namespace de {
 				1 });
 
 		device.copyBufferToImage(*stagingBuffer.getBuffer(),
-			textureImage_->getImage(), 
+			textureImage_->getImage(),
 			region
 		);
 
-		device.transitionImageLayout(textureImage_->getImage(), textureFormat,
-			vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+		generateMipmaps(device, textureImage_->getImage(), textureFormat,
+			texWidth, texHeight, mipLevels);
 
 		textureImageView_ = utl::createImageView(device.getLogicalDevice(), textureImage_->getImage(),
-			textureFormat, vk::ImageAspectFlagBits::eColor);
+			textureFormat, vk::ImageAspectFlagBits::eColor,vk::ImageViewType::e2D,1,0,mipLevels,0);
 
-		textureSampler_ = utl::createTextureSampler(device.getLogicalDevice());
+		textureSampler_ = utl::createTextureSampler(device.getLogicalDevice(), addressMode, 
+			enableAnisotropy,4.f,static_cast<float>(mipLevels - 1));
 
 	}
 
 	Texture::Texture(const Device& device, vk::Format textureFormat,
 		void* data, uint32_t width, uint32_t height,
-		vk::ImageType imgType){
-	
+		vk::SamplerAddressMode addressMode,
+		bool enableAnisotropy,
+		vk::ImageType imgType) {
 
 		uint32_t pixelSize = utl::getFormatSize(textureFormat);
 
@@ -151,7 +315,7 @@ namespace de {
 		textureImageView_ = utl::createImageView(device.getLogicalDevice(), textureImage_->getImage(),
 			textureFormat, vk::ImageAspectFlagBits::eColor);
 
-		textureSampler_ = utl::createTextureSampler(device.getLogicalDevice());
+		textureSampler_ = utl::createTextureSampler(device.getLogicalDevice(), addressMode, enableAnisotropy);
 	}
 
 

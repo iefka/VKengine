@@ -1,7 +1,7 @@
 #ifndef _DE_GameObject_
 #define _DE_GameObject_
 
-#include"DE_Model.hpp"
+#include"Mesh/DE_Mesh.hpp"
 
 #include"glm_config.hpp"
 #include<unordered_map>
@@ -9,6 +9,7 @@
 
 
 namespace de {
+	class Material;
 
 	struct TransformComponent {
 	public:
@@ -71,11 +72,11 @@ namespace de {
 		GameObject(GameObject&&) = default;
 		GameObject& operator= (GameObject&&) = default;
 
-		std::unique_ptr<Model> model{};
+		std::shared_ptr<Mesh> mesh{};
 		glm::vec3 color{};
 		TransformComponent transform{};
 		std::unique_ptr<PointLightComponent> pointLight_ = nullptr;
-		std::shared_ptr<Material> material_;
+		std::vector<std::shared_ptr<Material>> materialsByMesh_;
 
 	private:
 		GameObject(uint32_t ID) : id_{ID} {}

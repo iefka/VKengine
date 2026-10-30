@@ -21,12 +21,19 @@
 #include"MaterialManager.hpp"
 #include"DE_MainRenderPass.hpp"
 #include"DE_Gui.hpp"
+#include"DE_GeometryPool.hpp"
 
 
 #include <vector>
 #include <memory>
 #include <chrono>
 
+namespace de {
+	class BindlessTextureRegistry;
+	class MaterialBuffer;
+	class TransformBuffer;
+	class IndirectCommandBuffer;
+}
 
 class AppTimer {
 public:
@@ -98,9 +105,12 @@ private:
 	std::unique_ptr<de::Device> device_;
 	de::Window window_;
 	
+	std::unique_ptr<de::GeometryPool> geometryPool;
 	std::unique_ptr<de::DescriptorPool> globalPool_;
-	std::vector<de::DescriptorSetLayout> descriptorLayouts_;
+	std::unordered_map<std::string,de::DescriptorSetLayout> descriptorLayouts_;
 	std::unique_ptr<de::MaterialManager> materialManager_;
+	std::unique_ptr<de::TransformBuffer> transformBuffer_;
+	std::unique_ptr<de::IndirectCommandBuffer> indirectBuffer_;
 	de::GameObject::Map gameObjects;
 
 	std::unique_ptr<de::CommandPool> commandPool_;         
@@ -109,6 +119,8 @@ private:
 #if 0
 	std::unique_ptr<de::ShaderTexturingPass> shaderTexturingPass_;
 #endif
+	std::unique_ptr<de::MaterialBuffer> materialBuffer_;
+	std::unique_ptr<de::BindlessTextureRegistry>bindlessRegistry_;
 	std::unique_ptr<de::MainRenderPass> mainPass_;
 	std::unique_ptr<de::GUIRenderPass> guiPass_;
 	std::unique_ptr<de::RenderSystem> renderSystem_;

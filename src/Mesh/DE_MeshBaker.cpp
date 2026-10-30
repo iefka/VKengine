@@ -38,7 +38,7 @@ namespace std {
 
 namespace de {
     constexpr uint32_t kMatCacheMagic = 0x4154414Du;
-    constexpr uint32_t kMatCacheVersion = 2;
+    constexpr uint32_t kMatCacheVersion = 3;
 
     struct MaterialCacheHeader {
         uint32_t magic;
@@ -178,15 +178,15 @@ namespace de {
                     }
                     if (idx.normal_index >= 0) {
                         key.normal = {
-                            attrib.vertices[3 * idx.normal_index + 0],
-                            attrib.vertices[3 * idx.normal_index+ 1],
-                            attrib.vertices[3 * idx.normal_index+ 2]
+                            attrib.normals[3 * idx.normal_index + 0],
+                            attrib.normals[3 * idx.normal_index+ 1],
+                            attrib.normals[3 * idx.normal_index+ 2]
                         };
                     }
                     if (idx.texcoord_index >= 0) {
                         key.uv = {
-                            attrib.vertices[3 * idx.texcoord_index + 0],
-                            attrib.vertices[3 * idx.texcoord_index + 1]
+                            attrib.texcoords[2 * idx.texcoord_index + 0],
+                            attrib.texcoords[2 * idx.texcoord_index + 1]
                         };
                     }
 
@@ -229,6 +229,9 @@ namespace de {
                 copyToFixed(rec.name, raw.name);
                 copyToFixed(rec.diffuseTexturePath, raw.diffuse_texname);
                 rec.diffuseColor = { raw.diffuse[0],raw.diffuse[1],raw.diffuse[2] };
+                rec.dissolve = raw.dissolve;
+                rec.specularColor = { raw.specular[0],raw.specular[1],raw.specular[2] };
+                rec.shininess = raw.shininess;
                 return rec;
             }) | std::ranges::to<std::vector>();
         

@@ -73,7 +73,8 @@ namespace de {
 		inline vk::UniqueSampler createTextureSampler(const vk::Device& logicalDevice,
 			vk::SamplerAddressMode addressMode = vk::SamplerAddressMode::eRepeat,
 			bool anisotropyEnable = true,
-			float maxAnisotropy = 4.0f) {
+			float maxAnisotropy = 4.0f,
+			float maxLod = 0.f) {
 
 			const auto samplerInfo = vk::SamplerCreateInfo{}
 				.setAddressModeU(addressMode)
@@ -90,7 +91,7 @@ namespace de {
 				.setMipmapMode(vk::SamplerMipmapMode::eLinear)
 				.setMipLodBias(0.f)
 				.setMinLod(0.f)
-				.setMaxLod(0.f);
+				.setMaxLod(maxLod);
 
 			return logicalDevice.createSamplerUnique(samplerInfo);
 		}

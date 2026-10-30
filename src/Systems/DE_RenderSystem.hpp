@@ -18,12 +18,12 @@ namespace de {
 	class GameObject;
 	class Camera;
 	class DescriptorSetLayout;
+	class GeometryPool;
 	struct FrameInfo;
+	class Material;
+	class TransformBuffer;
+	class IndirectCommandBuffer;
 
-	struct SimplePushConstant {
-		glm::mat4 modelMatrix{ 1.f };
-		glm::mat4 normalMatrix{};
-	};
 
 	class RenderSystem {
 	public:
@@ -31,7 +31,25 @@ namespace de {
 		RenderSystem(const Device& device,
 			const RenderPass& renderPass,
 			 const vk::Extent2D extent,
-			std::vector<DescriptorSetLayout>& descriptorSetLayouts);
+			std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts);
+		
+		void setDefaultMaterial(std::shared_ptr<Material> material) noexcept {
+			defaultMaterial_ = std::move(material);
+		}
+		void setMaterialDescriptorSet(vk::DescriptorSet set) noexcept {
+			materialDescriptorSet_ = set;
+		}
+		void setMaterialBufferDescriptorSet(vk::DescriptorSet set) noexcept {
+			materialBufferDescriptorSet_ = set;
+		}
+		void setTransformBuffer(TransformBuffer& transformBuffer) noexcept {
+			transformBuffer_ = &transformBuffer;
+		}
+		void setIndirectBuffer(IndirectCommandBuffer& indirectBuffer) noexcept {
+			indirectBuffer_ = &indirectBuffer;
+		}
+
+		void setGeometryPool(const GeometryPool& geometryPool);
 
 		void renderGameObjects(const FrameInfo& frameInfo);
 	private:
@@ -45,9 +63,14 @@ namespace de {
 		std::unique_ptr<GraphicsPipeline> graphicsPipeline_ = nullptr;
 		std::unique_ptr<de::Shader> vertexShader_ = nullptr;
 		std::unique_ptr<de::Shader> fragmentShader_ = nullptr;
+		std::shared_ptr<Material> defaultMaterial_ = nullptr;
 
-		PushConstant<SimplePushConstant> pushConstant_;
-		SimplePushConstant pushData{};
+		const GeometryPool* geometryPool_ = nullptr;
+		vk::DescriptorSet materialDescriptorSet_;
+		vk::DescriptorSet materialBufferDescriptorSet_;
+
+		TransformBuffer* transformBuffer_ = nullptr;
+		IndirectCommandBuffer* indirectBuffer_ = nullptr;
 	};
 
 }

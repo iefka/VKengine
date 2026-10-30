@@ -13,7 +13,7 @@ namespace de {
 	SkyBoxSystem::SkyBoxSystem(const Device& device,
 		const RenderPass& renderPass,
 		const vk::Extent2D extent,
-		std::vector<DescriptorSetLayout>& descriptorSetLayouts,
+		std::vector<vk::DescriptorSetLayout> descriptorSetLayouts,
 		const DescriptorPool& descriptorPool,
 		std::string texturePath)
 		:renderPass_{renderPass},
@@ -27,21 +27,22 @@ namespace de {
 		fragmentShader_ = std::make_unique<de::Shader>(device_, "Shaders/bin/skybox.frag.spv");
 
 
-
-		auto vkDescriptors = 
-			descriptorSetLayouts
-			| std::views::transform([&](const auto& dsSet) {
-				return dsSet.getLayout();
-			})
-			| std::ranges::to<std::vector>();
-
-		createPipeline(extent_, vkDescriptors);
-
 		auto descriptorInfo = sbTexture_->getDescriptorInfo();
+
+		cubemapLayout_ = std::make_unique<DescriptorSetLayout>(
+			DescriptorSetLayout::Builder{ device_ }
+			.addBinding(0, vk::DescriptorType::eCombinedImageSampler, vk::ShaderStageFlagBits::eFragment)
+			.build()
+		);
+
 		// later somehow need to rewrite this hardcoded dsLayout[1]
-		cubemapDescriptor_ = DescriptorWriter{ device, descriptorPool, descriptorSetLayouts[1] }
+		cubemapDescriptor_ = DescriptorWriter{ device, descriptorPool, *cubemapLayout_}
 			.writeImage(0, &descriptorInfo)
 			.build();
+
+		descriptorSetLayouts.push_back(cubemapLayout_->getLayout());
+		createPipeline(extent_, descriptorSetLayouts);
+
 	}
 
 	void SkyBoxSystem::render(const FrameInfo& frameInfo){
@@ -56,13 +57,8 @@ namespace de {
 
 	void SkyBoxSystem::createPipeline(const vk::Extent2D extent,
 		std::vector<vk::DescriptorSetLayout>&descriptorSetLayouts){
-		
-		const auto& vertexAttributes = de::Model::Vertex::getAttributes();
-		const auto& bindingDescription = de::Model::Vertex::getBindings();
 
-		auto vertexInputState = vk::PipelineVertexInputStateCreateInfo{}
-			.setVertexAttributeDescriptions(vertexAttributes)
-			.setVertexBindingDescriptions(bindingDescription);
+		auto vertexInputState = vk::PipelineVertexInputStateCreateInfo{};
 
 		const auto rasterizationState = vk::PipelineRasterizationStateCreateInfo{}
 			.setDepthClampEnable(false)

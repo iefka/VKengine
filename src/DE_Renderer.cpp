@@ -188,6 +188,10 @@ namespace de {
 		if (!frameOptimal) { return; }
 		auto& frame = *frameOptimal;
 
+		for (auto& step : computeSteps_) {
+			step->dispatch(frame.commandBuffer, frame.frameIndex);
+		}
+
 		for (auto& pass : passes_) {
 
 			pass->preRecord(frame);

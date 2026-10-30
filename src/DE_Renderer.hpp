@@ -8,6 +8,7 @@
 #include "DE_Swapchain.hpp"
 #include "DE_RenderTarget.hpp"
 #include"DE_IRenderPass.hpp"
+#include"DE_IComputeStep.hpp"
 
 namespace de {
 	class Device;
@@ -73,6 +74,13 @@ namespace de {
 			auto removed = std::ranges::remove(passes_, pass);
 			passes_.erase(removed.begin(), removed.end());
 		}
+		void registerCompute(IComputeStep* compute) {
+			computeSteps_.push_back(compute);
+		}
+		void unregisterCompute(IComputeStep* compute) {
+			auto removed = std::ranges::remove(computeSteps_, compute);
+			computeSteps_.erase(removed.begin(), removed.end());
+		}
 
 		const RenderTarget& getSwapchainRenderTarget() const noexcept  { return swapchainTarget_; }
 
@@ -103,6 +111,7 @@ namespace de {
 
 		
 		std::unique_ptr<RenderPass> renderPass_;
+		std::vector<IComputeStep*> computeSteps_;
 		std::vector<IRenderPass*> passes_;
 		std::vector<vk::UniqueFence> inFlightFences_;
 		std::vector<vk::UniqueSemaphore> readyForRenderengSemaphores_;

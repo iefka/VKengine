@@ -1,217 +1,139 @@
 #include "DE_Device.hpp"
-#include"DE_Renderer.hpp"
-#include"DE_Descriptors.hpp"
-#include"DE_RenderPass.hpp"
-#include"Utility/DE_Utility.hpp"
-#include"DE_Memory.hpp"
+#include "DE_Descriptors.hpp"
+#include "Utility/DE_Utility.hpp"
+#include "DE_Memory.hpp"
 #include "DE_Shaders.hpp"
-#include"DE_Pipeline.hpp"
-#include "DE_ShaderTexturingPass.hpp"
+#include "DE_Pipeline.hpp"
+#include"DE_ShaderTexturingPass.hpp"
 
+namespace de {
 
-namespace de{
-	ShaderTexturingPass::ShaderTexturingPass(const Device& device,
-		vk::Extent2D extent,
-		const RenderPass& renderPass,
-		const Renderer& renderer,
-		const std::filesystem::path& computeShaderPath)
-		:device_{ device },
-		extent_{extent}
-		,renderPass_{renderPass}
-		,renderer_{ renderer } {
-	
-		constexpr vk::Format imageFormat{ vk::Format::eR8G8B8A8Unorm };
+    namespace {
 
-		pushConstantData_.pcTime = 0.f;
+        constexpr vk::Format kImageFormat = vk::Format::eR8G8B8A8Unorm;
+    }
 
-		vertexShader_ = std::make_unique<Shader>(device_,
-			"Shaders/bin/fullscreen.vert.spv");
-		fragmentShader_ = std::make_unique<Shader>(device_,
-			"Shaders/bin/texturePresent.frag.spv");
-		computeShader_ = std::make_unique<Shader>(device_,
-			computeShaderPath);
+    ComputeTextureTarget::ComputeTextureTarget(const Device& device,
+        vk::Extent2D extent,
+        uint32_t framesInFlight,
+        const std::filesystem::path& computeShaderPath)
+        : device_{ device }
+        , extent_{ extent }
+        , framesInFlight_{ framesInFlight }
+    {
+        computeShader_ = std::make_unique<Shader>(device_, computeShaderPath);
 
-		auto imageInfo = ImageUsageInfo{
-			0,0,
-			vk::ImageCreateInfo{}
-				.setImageType(vk::ImageType::e2D)
-				.setExtent(vk::Extent3D{extent,1})
-				.setMipLevels(1)
-				.setArrayLayers(1)
-				.setTiling(vk::ImageTiling::eOptimal)
-				.setUsage(vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled)
-				.setFormat(imageFormat)
-				.setInitialLayout(vk::ImageLayout::eUndefined)
-				.setSamples(vk::SampleCountFlagBits::e1)
-				.setSharingMode(vk::SharingMode::eExclusive),
-			vk::MemoryPropertyFlagBits::eDeviceLocal
-		};
+        descriptorLayout_ = std::make_unique<DescriptorSetLayout>(
+            DescriptorSetLayout::Builder{ device_ }
+            .addBinding(0, vk::DescriptorType::eStorageImage, vk::ShaderStageFlagBits::eCompute)
+            .build()
+        );
 
-		computeImage_ = std::make_unique<Image>(device_, imageInfo);
-		device_.transitionImageLayout(computeImage_->getImage(),
-			imageFormat, vk::ImageLayout::eUndefined,
-			vk::ImageLayout::eGeneral);
-		computeImageView_ = utl::createImageView(device_.getLogicalDevice(), computeImage_->getImage(),
-			imageFormat, vk::ImageAspectFlagBits::eColor);
+        descriptorPool_ = std::make_unique<DescriptorPool>(
+            DescriptorPool::Builder{ device_ }
+            .setMaxSets(framesInFlight_)
+            .addPoolSize(vk::DescriptorType::eStorageImage, framesInFlight_)
+            .build()
+        );
 
-		computeImageSampler_ = utl::createTextureSampler(device_.getLogicalDevice(),
-			vk::SamplerAddressMode::eClampToEdge, false);
+       
+        sampler_ = utl::createTextureSampler(device_.getLogicalDevice(),
+            vk::SamplerAddressMode::eClampToEdge, false);
 
-		descriptorPool_ = std::make_unique<DescriptorPool>(
-			DescriptorPool::Builder{ device_ }
-			.setMaxSets(2)
-			.addPoolSize(vk::DescriptorType::eStorageImage, 1)
-			.addPoolSize(vk::DescriptorType::eCombinedImageSampler, 1)
-			.build()
-		);
+        slots_.resize(framesInFlight_);
+        for (uint32_t i = 0; i < framesInFlight_; ++i) {
 
-		computeDescriptorLayout_ = std::make_unique<DescriptorSetLayout>(
-			DescriptorSetLayout::Builder{ device }
-			.addBinding(0, vk::DescriptorType::eStorageImage
-				, vk::ShaderStageFlagBits::eCompute)
-			.build()
-		);
-		graphicsDescriptorLayout_ = std::make_unique<DescriptorSetLayout>(
-			DescriptorSetLayout::Builder{ device }
-			.addBinding(0, vk::DescriptorType::eCombinedImageSampler
-				, vk::ShaderStageFlagBits::eFragment)
-			.build()
-		);
+            auto imageInfo = ImageUsageInfo{
+                0, 0,
+                vk::ImageCreateInfo{}
+                    .setImageType(vk::ImageType::e2D)
+                    .setExtent(vk::Extent3D{ extent_, 1 })
+                    .setMipLevels(1)
+                    .setArrayLayers(1)
+                    .setTiling(vk::ImageTiling::eOptimal)
+                    .setUsage(vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled)
+                    .setFormat(kImageFormat)
+                    .setInitialLayout(vk::ImageLayout::eUndefined)
+                    .setSamples(vk::SampleCountFlagBits::e1)
+                    .setSharingMode(vk::SharingMode::eExclusive),
+                vk::MemoryPropertyFlagBits::eDeviceLocal
+            };
 
-		auto descriptorImageInfo = vk::DescriptorImageInfo{}
-			.setImageLayout(vk::ImageLayout::eGeneral)
-			.setImageView(*computeImageView_)
-			.setSampler(*computeImageSampler_);
+            slots_[i].image = std::make_unique<Image>(device_, imageInfo);
 
-		computeDescriptor_ = DescriptorWriter{ device,*descriptorPool_, *computeDescriptorLayout_ }
-			.writeImage(0, &descriptorImageInfo)
-			.build();
+            device_.transitionImageLayout(slots_[i].image->getImage(),
+                kImageFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
 
-		graphicsDescriptor_ = DescriptorWriter{ device,*descriptorPool_, *graphicsDescriptorLayout_ }
-			.writeImage(0, &descriptorImageInfo)
-			.build();
+            slots_[i].view = utl::createImageView(device_.getLogicalDevice(), slots_[i].image->getImage(),
+                kImageFormat, vk::ImageAspectFlagBits::eColor);
 
+            auto descriptorImageInfo = vk::DescriptorImageInfo{}
+                .setImageLayout(vk::ImageLayout::eGeneral)
+                .setImageView(*slots_[i].view)
+                .setSampler(*sampler_);
 
-		createPipelines(extent);
-	}
-	ShaderTexturingPass::~ShaderTexturingPass() = default;
+            slots_[i].descriptorSet = DescriptorWriter{ device_, *descriptorPool_, *descriptorLayout_ }
+                .writeImage(0, &descriptorImageInfo)
+                .build();
 
-	void ShaderTexturingPass::updateTime(float deltaTime){
-	
-		pushConstantData_.pcTime = deltaTime;
-	}
-	std::vector<vk::ClearValue> ShaderTexturingPass::getClearValues() const{
-		return std::vector<vk::ClearValue>{
-			vk::ClearValue{}.setColor(std::array<float, 4>{{1.0f, 0.0f, 1.0f, 1.0f}}),
-			vk::ClearValue{}.setDepthStencil(vk::ClearDepthStencilValue{ 1.0f, 0 }) };
-	}
-	const RenderTarget& ShaderTexturingPass::getRenderTarget() const{
-		return renderer_.getSwapchainRenderTarget();
-	}
-	void ShaderTexturingPass::preRecord(const FrameData& frameData){
-		pushConstant_.setValue(pushConstantData_);
+            slots_[i].textureSource = std::make_unique<ComputeTextureView>(
+                *sampler_, *slots_[i].view, vk::ImageLayout::eGeneral);
+        }
 
-		frameData.commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute,
-			*computePipeline_->getPipeline());
-		frameData.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-			*computePipeline_->getLayout(), 0, computeDescriptor_, {});
-		pushConstant_.push(frameData.commandBuffer, *computePipeline_->getLayout());
+        createPipeline();
+    }
 
-		uint32_t groupX = (extent_.width + 15) / 16;
-		uint32_t groupY = (extent_.height + 15) / 16;
-		frameData.commandBuffer.dispatch(groupX, groupY, 1);
+    ComputeTextureTarget::~ComputeTextureTarget() = default;
 
-		auto barrier = vk::ImageMemoryBarrier{}
-			.setOldLayout(vk::ImageLayout::eGeneral)
-			.setNewLayout(vk::ImageLayout::eGeneral)
-			.setSrcAccessMask(vk::AccessFlagBits::eShaderWrite)
-			.setDstAccessMask(vk::AccessFlagBits::eShaderRead)
-			.setImage(computeImage_->getImage())
-			.setSubresourceRange({ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 });
+    void ComputeTextureTarget::updateTime(float totalTime) {
+        pushConstantData_.pcTime = totalTime;
+    }
 
-		frameData.commandBuffer.pipelineBarrier(
-			vk::PipelineStageFlagBits::eComputeShader,
-			vk::PipelineStageFlagBits::eFragmentShader,
-			{}, {}, {}, barrier);
+    void ComputeTextureTarget::dispatch(vk::CommandBuffer commandBuffer, uint32_t frameIndex) {
 
-	}
-	void ShaderTexturingPass::record(const FrameData & frameData){
-	
+        pushConstant_.setValue(pushConstantData_);
 
-		frameData.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
-			*graphicsPipeline_->getPipeline());
-		frameData.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-			*graphicsPipeline_->getLayout(), 0, graphicsDescriptor_, {});
+        commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, *computePipeline_->getPipeline());
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+            *computePipeline_->getLayout(), 0, slots_[frameIndex].descriptorSet, {});
+        pushConstant_.push(commandBuffer, *computePipeline_->getLayout());
 
-		frameData.commandBuffer.draw(3, 1, 0, 0);
-	}
-	void ShaderTexturingPass::onSwapchainRecreation(const Swapchain & sc){
-		return;
-	}
-	void ShaderTexturingPass::createPipelines(vk::Extent2D extent) {
+        const uint32_t groupX = (extent_.width + 15) / 16;
+        const uint32_t groupY = (extent_.height + 15) / 16;
+        commandBuffer.dispatch(groupX, groupY, 1);
 
+        
+        auto barrier = vk::ImageMemoryBarrier{}
+            .setOldLayout(vk::ImageLayout::eGeneral)
+            .setNewLayout(vk::ImageLayout::eGeneral)
+            .setSrcAccessMask(vk::AccessFlagBits::eShaderWrite)
+            .setDstAccessMask(vk::AccessFlagBits::eShaderRead)
+            .setImage(slots_[frameIndex].image->getImage())
+            .setSubresourceRange({ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 });
 
-		//computePipeline
-		auto computeBuilder = ComputePipeline::Builer{}
-			.setShaderStage(
-				vk::PipelineShaderStageCreateInfo{}
-				.setModule(computeShader_->getShaderModule())
-				.setPName("main")
-				.setStage(vk::ShaderStageFlagBits::eCompute)
-			)
-			.addDsLayout(computeDescriptorLayout_->getLayout())
-			.setPushConstantRanges({ pushConstant_.getRange() });
-		
-			computePipeline_ = std::make_unique<ComputePipeline>(device_, computeBuilder);
+        commandBuffer.pipelineBarrier(
+            vk::PipelineStageFlagBits::eComputeShader,
+            vk::PipelineStageFlagBits::eFragmentShader,
+            {}, {}, {}, barrier);
+    }
 
-		//graphics pipeline
-		auto vertexInputState = vk::PipelineVertexInputStateCreateInfo{};
+    const ITextureSource& ComputeTextureTarget::getTextureSource(uint32_t frameIndex) const {
+        return *slots_[frameIndex].textureSource;
+    }
 
-		const auto rasterizationState = vk::PipelineRasterizationStateCreateInfo{}
-			.setDepthClampEnable(false)
-			.setRasterizerDiscardEnable(false)
-			.setCullMode(vk::CullModeFlagBits::eFront)
-			.setFrontFace(vk::FrontFace::eCounterClockwise)
-			.setLineWidth(1.f);
+    void ComputeTextureTarget::createPipeline() {
 
-		auto colorBlendAttachment = vk::PipelineColorBlendAttachmentState{}
-			.setBlendEnable(false)
-			.setColorWriteMask(vk::ColorComponentFlagBits::eR |
-				vk::ColorComponentFlagBits::eG |
-				vk::ColorComponentFlagBits::eB |
-				vk::ColorComponentFlagBits::eA);
-		auto colorBlendState = vk::PipelineColorBlendStateCreateInfo{}
-		.setAttachments(colorBlendAttachment);
+        auto builder = ComputePipeline::Builer{}
+            .setShaderStage(
+                vk::PipelineShaderStageCreateInfo{}
+                .setModule(computeShader_->getShaderModule())
+                .setPName("main")
+                .setStage(vk::ShaderStageFlagBits::eCompute)
+            )
+            .addDsLayout(descriptorLayout_->getLayout())
+            .setPushConstantRanges({ pushConstant_.getRange() });
 
-		const auto depthStencil = vk::PipelineDepthStencilStateCreateInfo{}
-			.setDepthTestEnable(true)
-			.setDepthWriteEnable(true)
-			.setDepthCompareOp(vk::CompareOp::eLess)
-			.setDepthBoundsTestEnable(false);
+        computePipeline_ = std::make_unique<ComputePipeline>(device_, builder);
+    }
 
-		auto multisampleInfo = vk::PipelineMultisampleStateCreateInfo{}
-		.setRasterizationSamples(vk::SampleCountFlagBits::e1);
-
-		std::vector<vk::DynamicState> dynamicStates{
-			vk::DynamicState::eViewport,
-			vk::DynamicState::eScissor
-		};
-
-		auto graphicsBuilder = de::GraphicsBuilder()
-			.addFragmentShader("main", fragmentShader_->getShaderModule())
-			.addVertexShader("main", vertexShader_->getShaderModule())
-			.setRenderPass(*renderPass_.getRenderPass())
-			.setInputAssemblyState(vk::PrimitiveTopology::eTriangleList)
-			.setViewportState(extent)
-			.setRasterizationState(rasterizationState)
-			.setMultisampleState(multisampleInfo)
-			.setDynamicStates(dynamicStates)
-			.setDsLayouts({ graphicsDescriptorLayout_->getLayout() })
-			.setVertexInputState(vertexInputState)
-			.setColorBlendState(colorBlendState)
-			.setDepthStencilState(depthStencil);
-
-		graphicsPipeline_ = std::make_unique<de::GraphicsPipeline>(device_, graphicsBuilder);
-
-	}
-}
+} // namespace de

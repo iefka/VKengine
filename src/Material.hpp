@@ -5,29 +5,17 @@ namespace de {
 	class Material {
 	public:
 
-		struct materialData {
-			Texture& texture;
-		};
+		Material(std::shared_ptr<ITextureSource> texture, uint32_t materialIndex)
+			: texture_{ std::move(texture) }
+			, materialIndex_{ materialIndex } {}
 
-		// later with more data fields better create builder
-		Material(std::shared_ptr<Texture> texture,vk::DescriptorSet descriptor):
-			texture_{texture}
-			,descriptor_{std::move(descriptor)}{}
-
-
-		materialData getMaterialData() {
-			return materialData{
-				*texture_
-			};
-		}
-
-
-		vk::DescriptorSet getDescriptor() const noexcept {
-			return descriptor_;
+		uint32_t getMaterialIndex() const noexcept {
+			return materialIndex_;
 		}
 
 	private:
-		vk::DescriptorSet descriptor_;
-		std::shared_ptr <Texture> texture_;
+
+		std::shared_ptr<ITextureSource> texture_;
+		uint32_t materialIndex_;
 	};
 }

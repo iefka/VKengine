@@ -2,27 +2,37 @@
 
 //std
 #include<memory>
+#include<string>
+#include<array>
+#include<vector>
 
 //vulkan
 #include<vulkan/vulkan.hpp>
+
+#include"DE_ITextureSource.hpp"
 
 namespace de {
 
 	class Device;
 	class Image;
 
-	class Texture {
+	class Texture final : public ITextureSource {
 
 	public:
 
 		Texture(std::string pathToTexture,
 			const Device& device,
+			vk::Format textureFormat = vk::Format::eR8G8B8A8Srgb,
+			vk::SamplerAddressMode addressMode = vk::SamplerAddressMode::eClampToEdge,
+			bool enableAnisotropy = true,
 			vk::ImageType imgType = vk::ImageType::e2D);
 		Texture(const Device& device, vk::Format textureFormat,
 			void* data, uint32_t width, uint32_t height,
+			vk::SamplerAddressMode addressMode = vk::SamplerAddressMode::eClampToEdge,
+			bool enableAnisotropy = true,
 			vk::ImageType imgType = vk::ImageType::e2D);
 
-		Texture static loadCubemap(const Device& device, std::string pathToTexture);
+		static Texture loadCubemap(const Device& device, std::string pathToTexture);
 
 		~Texture();
 		Texture(const Texture&) = delete;
@@ -41,14 +51,14 @@ namespace de {
 			return *textureSampler_;
 		}
 
-		vk::DescriptorImageInfo getDescriptorInfo() const noexcept{
+		vk::DescriptorImageInfo getDescriptorInfo() const noexcept override {
 
 			return vk::DescriptorImageInfo{}
 				.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
 				.setImageView(*textureImageView_)
 				.setSampler(*textureSampler_);
 		}
-			
+
 
 	private:
 

@@ -13,16 +13,16 @@ namespace de {
 	class TextureManager;
 	class Device;
 	class Material;
-	class DescriptorPool;
-	class DescriptorSetLayout;
-	
+	class BindlessTextureRegistry;
+	class MaterialBuffer;
+	struct MaterialRecord;
 
 	class MaterialManager {
 	public:
 
-		MaterialManager(const Device& device, const DescriptorPool& descriptorPool,
-			const DescriptorSetLayout& descriptorLayout, std::string pathToMaterials);
-
+		MaterialManager(const Device& device,
+			BindlessTextureRegistry& bindlessRegistry,
+			MaterialBuffer& materialBuffer);
 
 		~MaterialManager();
 		MaterialManager(const MaterialManager&) = delete;
@@ -31,27 +31,34 @@ namespace de {
 		MaterialManager(MaterialManager&&) = default;
 		MaterialManager& operator=(MaterialManager&&) = default;
 
-		std::shared_ptr<Material> getMaterial(tinyobj::material_t& material);
+		std::vector<std::shared_ptr<Material>> resolveMaterials(
+			const std::vector<MaterialRecord>& materials,
+			const std::vector<int32_t>& defaultMaterialIds,
+			const std::string& mtlBaseDir);
+		std::shared_ptr<Material> getMaterial(const tinyobj::material_t& material, const std::string& mtlBaseDir);
+		std::shared_ptr<Material> getMaterial(const MaterialRecord& record, const std::string& mtlBaseDir);
 		std::shared_ptr<Material> getDefaultMaterial();
 
-		std::string getMaterialsPath() const noexcept {
-			return pathToMaterials_;
-		}
-		
 	private:
 
+		std::shared_ptr<Material> buildMaterial(
+			const std::string& cacheKey,
+			const std::string& diffuseTexName,
+			const std::string& normalTexName,
+			const glm::vec3& diffuseColor,
+			const glm::vec3& specularColor,
+			float dissolve,
+			float shininess,
+			const std::string& mtlBaseDir);
+
 		std::shared_ptr<Material> defaultMaterial_;
+
 		std::unordered_map <std::string, std::weak_ptr<Material>> cache_;
-
-		const std::string pathToMaterials_;
-
-		//default material owner
-		const std::string defaultTexture{ "Textures/Default.jpg" };
 
 		std::unique_ptr<TextureManager> textureManager_;
 
-		const DescriptorPool& descriptorPool_;
-		const DescriptorSetLayout& descriptorLayout_;
+		BindlessTextureRegistry& bindlessRegistry_;
+		MaterialBuffer& materialBuffer_;
 		const Device& device_;
 
 	};

@@ -7,6 +7,10 @@
 #include "DE_CommandBuffers.hpp"
 #include "DE_PushConstants.hpp"
 #include "Utility/DE_Debug.hpp"
+#include"DE_MaterialBuffer.hpp"
+#include"DE_BindlessTextureRegistry.hpp"
+#include"DE_IndirectCommandBuffer.hpp"
+#include"SSBO/DE_TransformBuffer.hpp"
 #include "Utility/DE_Utility.hpp"
 
 #include"third_party/imgui/imgui.h"
@@ -113,16 +117,12 @@ void Application::initDescriptorSets() {
 	);
 
 	//set 0
-	descriptorLayouts_.push_back(de::DescriptorSetLayout::Builder{ *device_ }
+	descriptorLayouts_.try_emplace("ubo",de::DescriptorSetLayout::Builder{*device_}
 		.addBinding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eAllGraphics)
 		.build()
 	);
 
 	//set 1
-	descriptorLayouts_.push_back(de::DescriptorSetLayout::Builder{ *device_ }
-		.addBinding(0, vk::DescriptorType::eCombinedImageSampler, vk::ShaderStageFlagBits::eFragment)
-		.build()
-	);
 
 	
 
@@ -137,7 +137,8 @@ void Application::preparePasses(){
 		*pointLightSystem_,
 		*controlledCamera_,
 		gameObjects,
-		descriptorLayouts_[0]);
+		descriptorLayouts_.at("ubo")
+		);
 
 	guiPass_ = std::make_unique<de::GUIRenderPass>(
 		*instance_,
@@ -161,20 +162,78 @@ void Application::preparePasses(){
 
 void Application::initGameObjects() {
 
+	constexpr uint32_t kMaxTextures = 1024u;
+	constexpr uint32_t kMaterialInitialCapacity = 256u;
 
-	materialManager_ = std::make_unique<de::MaterialManager>(*device_, *globalPool_ ,descriptorLayouts_[1], "Materials");
+	bindlessRegistry_ = std::make_unique<de::BindlessTextureRegistry>(*device_, kMaxTextures);
+	materialBuffer_ = std::make_unique<de::MaterialBuffer>(*device_, kMaterialInitialCapacity);
+	materialManager_ = std::make_unique<de::MaterialManager>(*device_, *bindlessRegistry_, *materialBuffer_);
+	transformBuffer_ = std::make_unique<de::TransformBuffer>(*device_, config_.framesInFlight);
+	indirectBuffer_ = std::make_unique<de::IndirectCommandBuffer>(*device_, config_.framesInFlight);
+	geometryPool = std::make_unique<de::GeometryPool>(*device_);
 
 	controlledCamera_ = std::make_unique<de::ControlledCamera>(window_);
 
-	std::unique_ptr<de::Model> smoothVaseModel = de::Model::createModelFromFile(*device_,"Models/smooth_vase.obj",*materialManager_);
+	auto smoothVaseModel = de::Mesh::loadFromFile(*device_, *geometryPool,"Models/smooth_vase.obj");
+	if (!smoothVaseModel) {
+		std::cout << smoothVaseModel.error();
+	}
 	auto smoothVase = de::GameObject::createGameObject();
-	smoothVase.model = std::move(smoothVaseModel);
+	smoothVase.mesh = std::move(smoothVaseModel->mesh);
+	smoothVase.materialsByMesh_ = materialManager_->resolveMaterials(
+		smoothVaseModel->materials,
+		smoothVaseModel->defaultMaterialIDs,
+		smoothVaseModel->mtlBaseDir
+	);
 	smoothVase.transform.rotation.x = glm::radians(180.f);
 	smoothVase.transform.translation = { .0f, .0f, 0.f };
 	smoothVase.transform.scale = glm::vec3(3.f);
 	gameObjects.emplace(smoothVase.getId(), std::move(smoothVase));
 
+#if 1
+	auto galleryModel = de::Mesh::loadFromFile(*device_, *geometryPool, "assets/gallery/gallery.obj");
+	auto gallery = de::GameObject::createGameObject();
+	gallery.mesh = std::move(galleryModel->mesh);
+	gallery.materialsByMesh_ = materialManager_->resolveMaterials(
+		galleryModel->materials,
+		galleryModel->defaultMaterialIDs,
+		galleryModel->mtlBaseDir
+	);
+	gameObjects.emplace(gallery.getId(), std::move(gallery));
+#endif
 
+#if BEDROOM
+	auto bedroomModel = de::Mesh::loadFromFile(*device_, *geometryPool, "assets/bedroom/iscv2.obj");
+	auto bedroom = de::GameObject::createGameObject();
+	bedroom.mesh = std::move(bedroomModel->mesh);
+	bedroom.materialsByMesh_ = materialManager_->resolveMaterials(
+		bedroomModel->materials,
+		bedroomModel->defaultMaterialIDs,
+		bedroomModel->mtlBaseDir
+	);
+	bedroom.transform.scale = glm::vec3(0.2f);
+	bedroom.transform.rotation.x = glm::radians(-90.f);
+	gameObjects.emplace(bedroom.getId(), std::move(bedroom));
+
+#endif
+#if 1
+	auto cubeModel = de::Mesh::loadFromFile(*device_, *geometryPool, "Models/cube.obj");
+	auto cube = de::GameObject::createGameObject();
+	cube.mesh = std::move(cubeModel->mesh);
+	cube.materialsByMesh_ = materialManager_->resolveMaterials(
+		cubeModel->materials,
+		cubeModel->defaultMaterialIDs,
+		cubeModel->mtlBaseDir
+	);
+	cube.transform.rotation.x = glm::radians(180.f);
+	cube.transform.scale =glm::vec3(0.2f);
+	cube.transform.translation = { 1.f, 0.2f, 0.f };
+	gameObjects.emplace(cube.getId(), std::move(cube));
+
+
+#endif
+
+#if MODELS
 	std::unique_ptr<de::Model>flatVaseModel = de::Model::createModelFromFile(*device_, "Models/flat_vase.obj", *materialManager_);
 	auto flatVase = de::GameObject::createGameObject();	
 	flatVase.model = std::move(flatVaseModel);
@@ -183,13 +242,7 @@ void Application::initGameObjects() {
 	flatVase.transform.scale = glm::vec3(3.f);
 	gameObjects.emplace(flatVase.getId(), std::move(flatVase));
 
-	std::unique_ptr<de::Model> cubeModel = de::Model::createModelFromFile(*device_, "Models/cube.obj", *materialManager_);
-	auto cube = de::GameObject::createGameObject();
-	cube.model = std::move(cubeModel);
-	cube.transform.rotation.x = glm::radians(180.f);
-	cube.transform.scale = { 0.2f,0.2f,0.2f };
-	cube.transform.translation = { 1.f, 0.2f, 0.f };
-	gameObjects.emplace(cube.getId(), std::move(cube));
+	
 
 	std::unique_ptr<de::Model> quadModel = de::Model::createModelFromFile(*device_, "Models/quad.obj", *materialManager_);
 	auto flor = de::GameObject::createGameObject();
@@ -198,7 +251,7 @@ void Application::initGameObjects() {
 	flor.transform.scale = { 3.f, 1.f, 3.f };
 	flor.transform.translation = {0.f, 0.0f, 0.f};
 	gameObjects.emplace (flor.getId(), std::move(flor));
-
+#endif
 
 	std::vector<glm::vec3> lightColors{
 	  {1.f, .1f, .1f},
@@ -210,26 +263,50 @@ void Application::initGameObjects() {
 	};
 
 	for (int i = 0; i < lightColors.size(); i++) {
-		auto pointLight = de::GameObject::makePointLight(0.2f,0.1f);
+		auto pointLight = de::GameObject::makePointLight(14.f,0.1f);
 		pointLight.color = lightColors[i];
 		auto rotateLight = glm::rotate(
 			glm::mat4(1.f),
 			(i * glm::two_pi<float>()) / lightColors.size(),
 			{ 0.f, 1.f, 0.f });
-		pointLight.transform.translation = glm::vec3(rotateLight * glm::vec4(1.f, 1.f, 1.f, 1.f));
+		pointLight.transform.translation = glm::vec3(rotateLight * glm::vec4(1.f, 4.f, 1.f, 1.f));
 		gameObjects.emplace(pointLight.getId(), std::move(pointLight));
 	}
 }
 
 void Application::initSystems(){
+
+	//renderSystem
+	std::vector<vk::DescriptorSetLayout> renderSystemLayouts{
+		descriptorLayouts_.at("ubo").getLayout(),
+		bindlessRegistry_->getDescriptorLayout(),
+		materialBuffer_->getDescriptorLayout().getLayout(),
+		transformBuffer_->getDescriptorLayout().getLayout()
+	};
 	renderSystem_ = std::make_unique<de::RenderSystem>(
-		*device_, renderer_->getMainRenderPass(), window_.getExtent(), descriptorLayouts_
+		*device_, renderer_->getMainRenderPass(), window_.getExtent(), renderSystemLayouts
 	);
+	renderSystem_->setGeometryPool(*geometryPool);
+	renderSystem_->setDefaultMaterial(materialManager_->getDefaultMaterial());
+	renderSystem_->setMaterialDescriptorSet(bindlessRegistry_->getDescriptorSet());
+	renderSystem_->setMaterialBufferDescriptorSet(materialBuffer_->getDescriptorSet());
+	renderSystem_->setIndirectBuffer(*indirectBuffer_);
+	renderSystem_->setTransformBuffer(*transformBuffer_);
+
+	//pointLights
+	std::vector<vk::DescriptorSetLayout> pointLightSystemLayout{
+		descriptorLayouts_.at("ubo").getLayout()
+	};
 	pointLightSystem_ = std::make_unique<de::PointLightSystem>(
-		*device_, renderer_->getMainRenderPass(), window_.getExtent(), descriptorLayouts_
+		*device_, renderer_->getMainRenderPass(), window_.getExtent(), pointLightSystemLayout
 	);
+
+	//skybox
+	std::vector<vk::DescriptorSetLayout> skyboxSystemLayout{
+		descriptorLayouts_.at("ubo").getLayout()
+	};
 	skyboxSystem_ = std::make_unique<de::SkyBoxSystem>(
-		*device_, renderer_->getMainRenderPass(), window_.getExtent(), descriptorLayouts_,
+		*device_, renderer_->getMainRenderPass(), window_.getExtent(), skyboxSystemLayout,
 		*globalPool_, "Materials/Textures/Cubemap_Sky_01.png"
 	);
 }

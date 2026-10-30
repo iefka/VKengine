@@ -107,7 +107,7 @@ currUBO.invViewProjMatrix = glm::inverse(currUBO.projectionMatrix * currUBO.view
 		pointLightSystem_.render(frameInfo);
 	}
 	void MainRenderPass::onSwapchainRecreation(const Swapchain& sc){
-		//skip, in this pass i use swapchainPass
+		//skip, in this pass use swapchainPass
 		return;
 	}
 }

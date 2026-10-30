@@ -1,4 +1,5 @@
 #include"DE_RenderSystem.hpp"
+#include"DE_GeometryPool.hpp"
 #include"DE_Descriptors.hpp"
 #include"DE_Device.hpp"
 #include"DE_Camera.hpp"
@@ -6,6 +7,8 @@
 #include"DE_RenderPass.hpp"
 #include"DE_FrameData.hpp"
 #include"Material.hpp"
+#include"SSBO/DE_TransformBuffer.hpp"
+#include"DE_IndirectCommandBuffer.hpp"
 #include"ranges"
 
 namespace de {
@@ -13,62 +16,100 @@ namespace de {
 	RenderSystem::RenderSystem(const Device& device,
 		const RenderPass& renderPass,
 		const vk::Extent2D extent,
-		std::vector<DescriptorSetLayout>& descriptorSetLayouts) :
+		std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts) :
 		device_{device},
 		renderPass_{renderPass},
-		extent_{extent},
-		pushConstant_{ 
-			PushConstant<SimplePushConstant>(vk::ShaderStageFlagBits::eVertex)}
-	{
+		extent_{extent}{
+
 		vertexShader_ = std::make_unique<de::Shader>(device_, "Shaders/bin/vertex.vert.spv");
 		fragmentShader_ = std::make_unique<de::Shader>(device_, "Shaders/bin/fragment.frag.spv");
-		
-		auto vkDescriptors =
-			descriptorSetLayouts
-			| std::views::transform([&](const auto& dsSet) {
-			return dsSet.getLayout();
-				})
-			| std::ranges::to<std::vector>();
 
-		createPipeline(extent, vkDescriptors);
+		createPipeline(extent, descriptorSetLayouts);
 
 	}
 
+	void RenderSystem::setGeometryPool(const GeometryPool& geometryPool){
+		geometryPool_ = &geometryPool;
+	}
+
 	void RenderSystem::renderGameObjects(const FrameInfo& frameInfo){
+
+		if (materialDescriptorSet_) {
+			frameInfo.commandBuffer.bindDescriptorSets(
+				vk::PipelineBindPoint::eGraphics,
+				*graphicsPipeline_->getLayout(), 1, materialDescriptorSet_, {}
+			);
+		}
+
+		if (materialBufferDescriptorSet_) {
+			frameInfo.commandBuffer.bindDescriptorSets(
+				vk::PipelineBindPoint::eGraphics,
+				*graphicsPipeline_->getLayout(), 2, materialBufferDescriptorSet_, {}
+			);
+		}
 
 		frameInfo.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_->getLayout(), 0, frameInfo.descriptorSet, {});
 
 		frameInfo.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_->getPipeline());
 
+		if (geometryPool_) {
+			geometryPool_->bind(frameInfo.commandBuffer);
+		}
+
+		std::vector<GPUTransformData> transforms;
+		std::vector<vk::DrawIndexedIndirectCommand> indirectCommands;
+		uint32_t instanceIndex = 0;
 		for (auto& kv : frameInfo.gameObjects) {
 
-
 			auto& object = kv.second;
-			if (!object.model) continue;
+			if (!object.mesh) continue;
 
-			const auto& objMaterial = object.model->getMaterial();
+			const auto normalMatrix = object.transform.normalMatrix();
+			const auto modelMatrix = object.transform.mat4();
+			const auto& subMeshes = object.mesh->getSubMeshes();
+			
+			for (size_t i = 0; i < subMeshes.size(); ++i){
+				const Material* material = (i < object.materialsByMesh_.size() && object.materialsByMesh_.at(i)) ?
+					object.materialsByMesh_.at(i).get() : defaultMaterial_.get();
 
-			frameInfo.commandBuffer.bindDescriptorSets(
-				vk::PipelineBindPoint::eGraphics,
-				*graphicsPipeline_->getLayout(),
-				1,
-				objMaterial.getDescriptor(),
-				{});
-
-			pushData.normalMatrix = object.transform.normalMatrix();
-			pushData.modelMatrix = object.transform.mat4();
-
-			pushConstant_.setValue(pushData);
-			pushConstant_.push(frameInfo.commandBuffer, *graphicsPipeline_->getLayout());
-			object.model->bind(frameInfo.commandBuffer);
-			object.model->draw(frameInfo.commandBuffer);
+				transforms.push_back(GPUTransformData{
+					.modelMatrix = modelMatrix,
+					.normalMatrix = normalMatrix,
+					.materialIndex = material->getMaterialIndex()
+				});
+				indirectCommands.push_back(object.mesh->getIndirectCommand(
+					static_cast<uint32_t>(i), instanceIndex)
+				);
+				++instanceIndex;
+			}
 		}
+
+			if (transformBuffer_) {
+				transformBuffer_->upload(frameInfo.frameIndex, transforms);
+				frameInfo.commandBuffer.bindDescriptorSets(
+					vk::PipelineBindPoint::eGraphics,
+					*graphicsPipeline_->getLayout(), 3,
+					transformBuffer_->getDescriptorSet(frameInfo.frameIndex), {}
+				);
+			}
+
+			if (indirectBuffer_ && !indirectCommands.empty()) {
+				indirectBuffer_->upload(frameInfo.frameIndex, indirectCommands);
+				
+				frameInfo.commandBuffer.drawIndexedIndirect(
+					indirectBuffer_->getBuffer(frameInfo.frameIndex),
+					0,
+					static_cast<uint32_t>(indirectCommands.size()),
+					sizeof(vk::DrawIndexedIndirectCommand)
+				);
+			}
+		
 	}
 
 	void RenderSystem::createPipeline(const vk::Extent2D extent, std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts) {
 
-		const auto& vertexAttributes = de::Model::Vertex::getAttributes();
-		const auto& bindingDescription = de::Model::Vertex::getBindings();
+		const auto& vertexAttributes = de::Mesh::Vertex::getAttributes();
+		const auto& bindingDescription = de::Mesh::Vertex::getBindings();
 
 		auto vertexInputState = vk::PipelineVertexInputStateCreateInfo{}
 			.setVertexAttributeDescriptions(vertexAttributes)
@@ -100,7 +141,7 @@ namespace de {
 		.setRasterizationSamples(vk::SampleCountFlagBits::e1);
 
 
-		std::vector<vk::DynamicState> dynamicStates{
+		std::vector<vk::DynamicState> dynamicStates{                                         
 			vk::DynamicState::eViewport,
 			vk::DynamicState::eScissor
 		};
@@ -116,7 +157,6 @@ namespace de {
 			.setDynamicStates(dynamicStates)
 			.setDsLayouts(descriptorSetLayouts)
 			.setVertexInputState(vertexInputState)
-			.addPushConstantRange(pushConstant_.getRange())
 			.setColorBlendState(colorBlendState)
 			.setDepthStencilState(depthStencil);
 

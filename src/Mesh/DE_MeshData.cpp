@@ -49,7 +49,7 @@ namespace de {
 
         const MeshFileHeader header{
             .magic = kMeshFileMagic,
-            .version = kMeshFileMagic,
+            .version = kMeshFileVersion,
             .meshCount = static_cast<uint32_t>(data.meshes.size()),
             .indexCount = static_cast<uint32_t>(data.indices.size()),
             .vertexCount = static_cast<uint32_t>(data.positions.size())
