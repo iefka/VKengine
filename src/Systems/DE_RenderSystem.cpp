@@ -75,7 +75,7 @@ namespace de {
 				transforms.push_back(GPUTransformData{
 					.modelMatrix = modelMatrix,
 					.normalMatrix = normalMatrix,
-					.materialIndex = material->getMaterialIndex()
+					.materialIndex = material->getMaterialIndex(frameInfo.frameIndex)
 				});
 				indirectCommands.push_back(object.mesh->getIndirectCommand(
 					static_cast<uint32_t>(i), instanceIndex)

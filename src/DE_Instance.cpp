@@ -1,4 +1,4 @@
-#define DEBUG
+
 #include "DE_Instance.hpp"
 
 namespace de{
@@ -12,7 +12,7 @@ namespace de{
 		std::vector<const char*> finalExtensions = extensions;
 		std::vector<const char*> finalLayers = layers;
 
-	#ifdef DEBUG
+	#ifndef NDEBUG
 		finalLayers.emplace_back("VK_LAYER_KHRONOS_validation");
 			
 		const std::vector<const char*> debugExtensions{

@@ -171,7 +171,7 @@ namespace de {
 			auto iAlloc = indexAllocator_.allocate(indexCount);
 			if (!iAlloc) {
 				growIndexBuffer(indexCount);
-				iAlloc = vertexAllocator_.allocate(indexCount);
+				iAlloc = indexAllocator_.allocate(indexCount);
 			}
 
 			uploadIndexData(iAlloc->offset, indices);

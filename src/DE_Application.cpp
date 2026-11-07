@@ -12,6 +12,8 @@
 #include"DE_IndirectCommandBuffer.hpp"
 #include"SSBO/DE_TransformBuffer.hpp"
 #include "Utility/DE_Utility.hpp"
+#include "Material.hpp"
+#include "DE_MaterialData.hpp"
 
 #include"third_party/imgui/imgui.h"
 #include"third_party/imgui/backends/imgui_impl_vulkan.h"
@@ -157,6 +159,9 @@ void Application::preparePasses(){
 
 	renderer_->registerPass(mainPass_.get());
 	renderer_->registerPass(guiPass_.get());
+	renderer_->registerCompute(computeTexture_.get());
+	renderer_->registerCompute(computeGeometry_.get());
+
 
 }
 
@@ -171,7 +176,26 @@ void Application::initGameObjects() {
 	transformBuffer_ = std::make_unique<de::TransformBuffer>(*device_, config_.framesInFlight);
 	indirectBuffer_ = std::make_unique<de::IndirectCommandBuffer>(*device_, config_.framesInFlight);
 	geometryPool = std::make_unique<de::GeometryPool>(*device_);
+	computeTexture_ = std::make_unique<de::ComputeTextureTarget>(*device_, vk::Extent2D{ 2048, 2048 },
+		config_.framesInFlight, "Shaders/bin/compute.comp.spv");
+	std::vector<de::Material::FrameBinding> computeFrames;
+	computeFrames.reserve(computeTexture_->getFramesInFlight());
 
+	for (uint32_t frame = 0; frame < computeTexture_->getFramesInFlight(); ++frame) {
+		const de::ITextureSource& view = computeTexture_->getTextureSource(frame);
+
+		de::GPUMaterialData gpuMaterial{};
+		gpuMaterial.diffuseColor = glm::vec4{ 1.0f };
+		gpuMaterial.specularColor = glm::vec4{ 0.0f, 0.0f, 0.0f, 1.0f };
+		gpuMaterial.diffuseTexIndex = bindlessRegistry_->registerTexture(view);
+
+		const uint32_t materialIndex = materialBuffer_->upload(gpuMaterial);
+		computeFrames.push_back(de::Material::FrameBinding
+			{ .materialIndex = materialIndex});
+	}
+
+	auto computeMaterial = std::make_shared<de::Material>(
+		std::move(computeFrames));
 	controlledCamera_ = std::make_unique<de::ControlledCamera>(window_);
 
 	auto smoothVaseModel = de::Mesh::loadFromFile(*device_, *geometryPool,"Models/smooth_vase.obj");
@@ -190,8 +214,22 @@ void Application::initGameObjects() {
 	smoothVase.transform.scale = glm::vec3(3.f);
 	gameObjects.emplace(smoothVase.getId(), std::move(smoothVase));
 
+	
+	auto grid = de::Mesh::GridDesc{
+		.resolutionU = 1024,
+		.resolutionV = 1024};
+	auto computeTorusKnotModel = de::Mesh::prepareForComputeMesh(*device_,*geometryPool,grid);
+	computeGeometry_ = std::make_unique<de::RuntimeComputeGeometry>(*device_,
+		*geometryPool,computeTorusKnotModel->getPositionInPool(),grid);
+	auto torusKnot = de::GameObject::createGameObject();
+	torusKnot.materialsByMesh_.assign(computeTorusKnotModel->getSubMeshes().size(), computeMaterial);
+	torusKnot.mesh = std::move(computeTorusKnotModel);
+	torusKnot.transform.scale = glm::vec3(0.1f);
+	torusKnot.transform.translation.y = 2.3f;
+	gameObjects.emplace(torusKnot.getId(), std::move(torusKnot));
+	
 #if 1
-	auto galleryModel = de::Mesh::loadFromFile(*device_, *geometryPool, "assets/gallery/gallery.obj");
+	auto galleryModel = de::Mesh::loadFromFile(*device_, *geometryPool, "assets/HWY_Galleri/161122_HWY_Galleri.obj");
 	auto gallery = de::GameObject::createGameObject();
 	gallery.mesh = std::move(galleryModel->mesh);
 	gallery.materialsByMesh_ = materialManager_->resolveMaterials(
@@ -199,6 +237,8 @@ void Application::initGameObjects() {
 		galleryModel->defaultMaterialIDs,
 		galleryModel->mtlBaseDir
 	);
+	gallery.transform.translation.y = -1.f;
+	gallery.transform.rotation.x = glm::radians(-90.f);
 	gameObjects.emplace(gallery.getId(), std::move(gallery));
 #endif
 
@@ -216,42 +256,47 @@ void Application::initGameObjects() {
 	gameObjects.emplace(bedroom.getId(), std::move(bedroom));
 
 #endif
+
+#if 1
+	auto dragonModel = de::Mesh::loadFromFile(*device_, *geometryPool, "assets/dragon/dragon.obj");
+	auto dragon = de::GameObject::createGameObject();
+	dragon.mesh = std::move(dragonModel->mesh);
+	dragon.materialsByMesh_ = materialManager_->resolveMaterials(
+		dragonModel->materials,
+		dragonModel->defaultMaterialIDs,
+		dragonModel->mtlBaseDir
+	);
+	dragon.transform.translation.y = 1.f;
+	dragon.transform.translation.x = 1.5f;
+	dragon.transform.scale = glm::vec3(3.f);
+	gameObjects.emplace(dragon.getId(), std::move(dragon));
+#endif
+
+#if BREKFAST_ROOM
+	auto brekfastRoomModel = de::Mesh::loadFromFile(*device_, *geometryPool, "assets/breakfast_room/breakfast_room.obj");
+	auto brekfastRoom = de::GameObject::createGameObject();
+	brekfastRoom.mesh = std::move(brekfastRoomModel->mesh);
+	brekfastRoom.materialsByMesh_ = materialManager_->resolveMaterials(
+		brekfastRoomModel->materials,
+		brekfastRoomModel->defaultMaterialIDs,
+		brekfastRoomModel->mtlBaseDir
+	);
+	gameObjects.emplace(brekfastRoom.getId(), std::move(brekfastRoom));
+#endif
+	
 #if 1
 	auto cubeModel = de::Mesh::loadFromFile(*device_, *geometryPool, "Models/cube.obj");
 	auto cube = de::GameObject::createGameObject();
 	cube.mesh = std::move(cubeModel->mesh);
-	cube.materialsByMesh_ = materialManager_->resolveMaterials(
-		cubeModel->materials,
-		cubeModel->defaultMaterialIDs,
-		cubeModel->mtlBaseDir
-	);
+	cube.materialsByMesh_.assign(cube.mesh->getSubMeshes().size(), computeMaterial);
 	cube.transform.rotation.x = glm::radians(180.f);
-	cube.transform.scale =glm::vec3(0.2f);
+	cube.transform.scale = glm::vec3(0.2f);
 	cube.transform.translation = { 1.f, 0.2f, 0.f };
 	gameObjects.emplace(cube.getId(), std::move(cube));
 
 
 #endif
 
-#if MODELS
-	std::unique_ptr<de::Model>flatVaseModel = de::Model::createModelFromFile(*device_, "Models/flat_vase.obj", *materialManager_);
-	auto flatVase = de::GameObject::createGameObject();	
-	flatVase.model = std::move(flatVaseModel);
-	flatVase.transform.rotation.x = glm::radians(180.f);
-	flatVase.transform.translation = { .6f, .0f, -0.8f };
-	flatVase.transform.scale = glm::vec3(3.f);
-	gameObjects.emplace(flatVase.getId(), std::move(flatVase));
-
-	
-
-	std::unique_ptr<de::Model> quadModel = de::Model::createModelFromFile(*device_, "Models/quad.obj", *materialManager_);
-	auto flor = de::GameObject::createGameObject();
-	flor.model = std::move(quadModel);
-	flor.transform.rotation.x = glm::radians(180.f);
-	flor.transform.scale = { 3.f, 1.f, 3.f };
-	flor.transform.translation = {0.f, 0.0f, 0.f};
-	gameObjects.emplace (flor.getId(), std::move(flor));
-#endif
 
 	std::vector<glm::vec3> lightColors{
 	  {1.f, .1f, .1f},
@@ -263,13 +308,13 @@ void Application::initGameObjects() {
 	};
 
 	for (int i = 0; i < lightColors.size(); i++) {
-		auto pointLight = de::GameObject::makePointLight(14.f,0.1f);
+		auto pointLight = de::GameObject::makePointLight(1.f,0.1f);
 		pointLight.color = lightColors[i];
 		auto rotateLight = glm::rotate(
 			glm::mat4(1.f),
 			(i * glm::two_pi<float>()) / lightColors.size(),
 			{ 0.f, 1.f, 0.f });
-		pointLight.transform.translation = glm::vec3(rotateLight * glm::vec4(1.f, 4.f, 1.f, 1.f));
+		pointLight.transform.translation = glm::vec3(rotateLight * glm::vec4(1.f, 3.f, 1.f, 1.f));
 		gameObjects.emplace(pointLight.getId(), std::move(pointLight));
 	}
 }
@@ -337,8 +382,8 @@ void Application::drawUI(){
 	std::string fps("FPS: " + std::to_string(fpsCounter.getFPS()));
 
 	ImGui::StyleColorsClassic();
-	
 	ImGui::Text(fps.c_str());
+	computeGeometry_->drawControlUI();
 
 	//end
 	ImGui::Render();
@@ -426,6 +471,9 @@ void Application::updateScene(float deltaTime, float totalTime) {
 #if 0
 	shaderTexturingPass_->updateTime(totalTime);
 #endif
+
+	computeGeometry_->updateTime(deltaTime);
+	computeTexture_->updateTime(totalTime);
 	controlledCamera_->updateCamera(deltaTime);
 	mainPass_->updateTime(deltaTime, totalTime);
 

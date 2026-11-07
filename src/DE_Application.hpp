@@ -15,6 +15,7 @@
 #include "DE_ControledCamera.hpp"
 #include"DE_GameObject.hpp"
 #include"Experements/DE_ShaderTexturingPass.hpp"
+#include"Experements/DE_RuntimeComputeGeometry.hpp"
 #include "Utility/DE_Debug.hpp"
 #include "Utility/DE_Utility.hpp"
 #include"glm_config.hpp"
@@ -116,9 +117,8 @@ private:
 	std::unique_ptr<de::CommandPool> commandPool_;         
 	std::unique_ptr<de::Renderer> renderer_;               
 
-#if 0
-	std::unique_ptr<de::ShaderTexturingPass> shaderTexturingPass_;
-#endif
+	std::unique_ptr<de::ComputeTextureTarget> computeTexture_;
+	std::unique_ptr<de::RuntimeComputeGeometry> computeGeometry_;
 	std::unique_ptr<de::MaterialBuffer> materialBuffer_;
 	std::unique_ptr<de::BindlessTextureRegistry>bindlessRegistry_;
 	std::unique_ptr<de::MainRenderPass> mainPass_;

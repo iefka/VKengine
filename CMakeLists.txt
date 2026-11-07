@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(DE_PACKAGE_RELEASE "Enable Windows Release packaging" OFF)
+
 find_program(GLSLC_EXECUTABLE glslc)
 
 # ---- Внешние зависимости через FetchContent — без conan ----
@@ -88,7 +90,12 @@ target_include_directories(vulkan_tutorial PRIVATE
 # Автопоиск: компилируется любой файл с расширением, которое понимает glslc,
 # независимо от имени — не нужно перечислять каждый шейдер вручную.
 set(SHADER_SOURCE_DIR "${CMAKE_SOURCE_DIR}/Shaders")
-set(SHADER_BINARY_DIR "${SHADER_SOURCE_DIR}/bin")
+if(DE_PACKAGE_RELEASE)
+    # Keep packaged-build shader output separate from the Debug build.
+    set(SHADER_BINARY_DIR "${CMAKE_BINARY_DIR}/de-compiled-shaders")
+else()
+    set(SHADER_BINARY_DIR "${SHADER_SOURCE_DIR}/bin")
+endif()
 
 file(GLOB_RECURSE SHADER_SOURCES CONFIGURE_DEPENDS
     "${SHADER_SOURCE_DIR}/*.vert"
@@ -155,3 +162,116 @@ target_link_libraries(vulkan_tutorial PRIVATE
     tinyobjloader
     ${Vulkan_LIBRARIES}
 )
+
+# ---- Windows Release package (opt-in) ----
+# The normal Debug build does not enable these install rules.
+if(DE_PACKAGE_RELEASE)
+    if(NOT WIN32)
+        message(FATAL_ERROR "DE_PACKAGE_RELEASE is intended for Windows")
+    endif()
+    if(NOT GLSLC_EXECUTABLE OR NOT EXISTS "${GLSLC_EXECUTABLE}")
+        message(FATAL_ERROR "glslc is required for DE_PACKAGE_RELEASE")
+    endif()
+    if(NOT TARGET compile_shaders OR NOT COMPILED_SHADERS)
+        message(FATAL_ERROR "No compiled shader outputs were configured")
+    endif()
+
+    # Runtime DLLs are searched next to the compiler and, if these targets
+    # are shared libraries, next to their build outputs as well.
+    get_filename_component(DE_COMPILER_BIN "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    set(DE_RUNTIME_SEARCH_DIRS "${DE_COMPILER_BIN}")
+    foreach(DE_DEP_TARGET IN ITEMS glfw glm::glm tinyobjloader)
+        if(TARGET "${DE_DEP_TARGET}")
+            get_target_property(DE_DEP_TYPE "${DE_DEP_TARGET}" TYPE)
+            if(DE_DEP_TYPE STREQUAL "SHARED_LIBRARY" OR DE_DEP_TYPE STREQUAL "MODULE_LIBRARY")
+                list(APPEND DE_RUNTIME_SEARCH_DIRS "$<TARGET_FILE_DIR:${DE_DEP_TARGET}>")
+            endif()
+        endif()
+    endforeach()
+
+    # Refuse to assemble a Debug or other configuration as a Release package.
+    install(CODE [=[
+        if(NOT CMAKE_INSTALL_CONFIG_NAME STREQUAL "Release")
+            message(FATAL_ERROR "The DE_Runtime package requires the Release configuration")
+        endif()
+    ]=] COMPONENT DE_Runtime)
+
+    install(TARGETS vulkan_tutorial
+        RUNTIME DESTINATION "." COMPONENT DE_Runtime
+    )
+
+    # Scan the executable's imported DLLs recursively. We use file() here
+    # rather than an install dependency set so DLLs built by this project are
+    # not automatically excluded from the scan.
+    set(DE_RUNTIME_DIR_LINES "")
+    foreach(DE_RUNTIME_DIR IN LISTS DE_RUNTIME_SEARCH_DIRS)
+        string(APPEND DE_RUNTIME_DIR_LINES "\n            \"${DE_RUNTIME_DIR}\"")
+    endforeach()
+    set(DE_INSTALL_DLL_CODE [=[
+        file(GET_RUNTIME_DEPENDENCIES
+            RESOLVED_DEPENDENCIES_VAR DE_RESOLVED_DLLS
+            EXECUTABLES "$<TARGET_FILE:vulkan_tutorial>"
+            DIRECTORIES @DE_RUNTIME_DIR_LINES@
+            PRE_EXCLUDE_REGEXES
+                "^api-ms-win-.*"
+                "^ext-ms-win-.*"
+                "^vulkan-1\\.dll$"
+            POST_EXCLUDE_REGEXES
+                "[/\\\\][Ss][Yy][Ss][Tt][Ee][Mm]32[/\\\\]"
+                "[/\\\\][Ss][Yy][Ss][Ww][Oo][Ww]64[/\\\\]"
+        )
+        foreach(DE_DLL IN LISTS DE_RESOLVED_DLLS)
+            file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/."
+                TYPE SHARED_LIBRARY FILES "${DE_DLL}")
+        endforeach()
+    ]=])
+    string(CONFIGURE "${DE_INSTALL_DLL_CODE}" DE_INSTALL_DLL_CODE @ONLY)
+    install(CODE "${DE_INSTALL_DLL_CODE}" COMPONENT DE_Runtime)
+
+    # Only outputs from configured shader sources, not arbitrary old .spv files.
+    install(FILES ${COMPILED_SHADERS}
+        DESTINATION "Shaders/bin" COMPONENT DE_Runtime
+    )
+
+    # Copy complete asset directories. Omit generated OBJ caches so that
+    # caches created by another build/compiler are not reused accidentally.
+    install(DIRECTORY
+        "${CMAKE_SOURCE_DIR}/assets"
+        "${CMAKE_SOURCE_DIR}/Models"
+        "${CMAKE_SOURCE_DIR}/Materials"
+        "${CMAKE_SOURCE_DIR}/Fonts"
+        DESTINATION "." COMPONENT DE_Runtime
+        PATTERN "*.obj.mesh" EXCLUDE
+        PATTERN "*.obj.matCache" EXCLUDE
+    )
+
+    # The application uses relative paths. This launcher makes the package
+    # directory the working directory without changing the C++ application.
+    file(GENERATE
+        OUTPUT "${CMAKE_BINARY_DIR}/de-package-run.bat"
+        CONTENT [=[@echo off
+setlocal
+cd /d "%~dp0" || exit /b 1
+"%~dp0$<TARGET_FILE_NAME:vulkan_tutorial>" %*
+exit /b %ERRORLEVEL%
+]=]
+        NEWLINE_STYLE WIN32
+    )
+    install(FILES "${CMAKE_BINARY_DIR}/de-package-run.bat"
+        DESTINATION "." RENAME "run.bat" COMPONENT DE_Runtime
+    )
+
+    set(DE_PACKAGE_DIR "${CMAKE_BINARY_DIR}/release-package" CACHE PATH
+        "Output directory for the Release runtime package")
+
+    # Depends on the executable, which itself depends on compile_shaders.
+    # Installation overlays the directory; it does not delete old files.
+    add_custom_target(stage_release
+        COMMAND "${CMAKE_COMMAND}" --install "${CMAKE_BINARY_DIR}"
+            --config "$<CONFIG>" --component DE_Runtime --prefix "${DE_PACKAGE_DIR}"
+        DEPENDS vulkan_tutorial
+        COMMENT "Assembling Windows Release package in ${DE_PACKAGE_DIR}"
+        USES_TERMINAL
+        VERBATIM
+    )
+endif()

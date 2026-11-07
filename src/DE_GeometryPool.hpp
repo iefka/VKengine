@@ -28,6 +28,7 @@ namespace de {
 		GeometryHandle reserveForCompute(uint32_t vertexCount,
 			const std::vector<uint32_t>& indices);
 
+		
 
 		//descriptor for compute shader
 		vk::DescriptorBufferInfo getVertexRangeDescriptor(uint32_t vertexOffset,
@@ -39,6 +40,8 @@ namespace de {
 		void free(const GeometryHandle& handle);
 
 		void bind(const vk::CommandBuffer& commandBuffer) const;
+
+		
 
 	private:
 

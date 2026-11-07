@@ -48,7 +48,7 @@ namespace de {
 		std::unique_ptr<GraphicsPipeline> graphicsPipeline_ = nullptr;
 		std::unique_ptr<Shader> vertexShader_ = nullptr;
 		std::unique_ptr<Shader> fragmentShader_ = nullptr;
-		std::unique_ptr<Texture> sbTexture_ = nullptr;
+		std::unique_ptr<Texture> sbTexture_;
 
 	};
 
