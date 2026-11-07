@@ -17,14 +17,18 @@ namespace de{
 			Builder& addBinding(uint32_t binding,
 				vk::DescriptorType descriptorType,
 				vk::ShaderStageFlags stageFlag, uint32_t count = 1 );
-
+			Builder& setPNext(const void* pNext);
+			Builder& setFlags(vk::DescriptorSetLayoutCreateFlags flags);
 			DescriptorSetLayout build();
 		private:
 			const Device& device_;
 			std::unordered_map<uint32_t, vk::DescriptorSetLayoutBinding> bindings_;
+			const void* pNext_ = nullptr;
+			vk::DescriptorSetLayoutCreateFlags flags_ = {};
 		};
 
-		DescriptorSetLayout(const Device& device, std::unordered_map<uint32_t, vk::DescriptorSetLayoutBinding> bindings);
+		DescriptorSetLayout(const Device& device, std::unordered_map<uint32_t, vk::DescriptorSetLayoutBinding> bindings,
+			vk::DescriptorSetLayoutCreateFlags flags, const void* pNext);
 
 		~DescriptorSetLayout() = default;
 

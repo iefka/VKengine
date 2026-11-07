@@ -64,6 +64,17 @@ namespace de{
 
 		DescriptorSetLayout::Builder::Builder(const Device& device) : device_(device){}
 
+		DescriptorSetLayout::Builder& 
+		DescriptorSetLayout::Builder::setPNext(const void* pNext){
+			pNext_ = pNext;
+			return *this;
+		}
+		DescriptorSetLayout::Builder& 
+		DescriptorSetLayout::Builder::setFlags(vk::DescriptorSetLayoutCreateFlags flags){
+			flags_ = flags;
+			return *this;
+		}
+
 		DescriptorSetLayout::Builder&
 			DescriptorSetLayout::Builder::addBinding(uint32_t binding,
 				vk::DescriptorType descriptorType,
@@ -84,14 +95,16 @@ namespace de{
 			return *this;
 		}
 
+
 		// use move senematics, dont use builder after build
 		DescriptorSetLayout DescriptorSetLayout::Builder::build(){
 
-			return DescriptorSetLayout(device_,std::move(bindings_));
+			return DescriptorSetLayout(device_,std::move(bindings_),flags_,pNext_);
 		}
 
 		DescriptorSetLayout::DescriptorSetLayout(const Device& device,
-			std::unordered_map<uint32_t, vk::DescriptorSetLayoutBinding> bindings) : bindings_(std::move(bindings)){
+			std::unordered_map<uint32_t, vk::DescriptorSetLayoutBinding> bindings,
+			vk::DescriptorSetLayoutCreateFlags flags, const void* pNext) : bindings_(std::move(bindings)){
 
 			const auto& logicalDevice = device.getLogicalDevice();
 
@@ -108,6 +121,8 @@ namespace de{
 				});
 
 			const auto descriptorLayoutInfo = vk::DescriptorSetLayoutCreateInfo{}
+				.setFlags(flags)
+				.setPNext(pNext)
 				.setBindings(bindingList);
 
 			descriptorSetLayout_ = logicalDevice.createDescriptorSetLayoutUnique(descriptorLayoutInfo);
@@ -153,7 +168,7 @@ namespace de{
 			const auto write = vk::WriteDescriptorSet {}
 				.setDstBinding(binding)
 				.setDescriptorCount(1)
-				.setDescriptorType(it->second.descriptorType)
+				.setDescriptorType(it->second.descriptorType) 
 				.setPImageInfo(imageInfo);
 
 			writes_.push_back(write);
