@@ -1,0 +1,92 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+struct VertexData{
+    vec4 position; //ignore w
+    vec4 normal; //ignore w
+    vec4 color;
+	vec2 uv;
+	vec2 _padding;
+};
+
+layout(std140, set = 0, binding = 0) uniform MeshBuffer{
+    float time;
+    uint numU;
+    uint numV;
+    float minU, maxU;
+    float minV, maxV;
+    uint p1, p2;
+    uint q1, q2;
+    float morph;
+    float _padding[4];
+}ubo;
+
+layout (set = 0, binding = 1) buffer VertexBuffer{
+    VertexData vertices[];
+} vbo;
+
+VertexData torusKnot(vec2 uv, vec2 pq){
+
+    const float p = pq.x;
+    const float q = pq.y;
+    const float baseRadius = 5.f;
+    const float segmentRadius = 3.f;
+    const float tubeRadius = 0.5f;
+    float ct = cos(uv.x);
+    float st = sin(uv.x);
+    float qp = q/p;
+    float qps = qp * segmentRadius;
+    float arg = uv.x * qp;
+    float sqp = sin(arg);
+    float cqp = cos(arg);
+    float BSQP = baseRadius + segmentRadius * cqp;
+    float dxdt = -qps * sqp * ct - st * BSQP;
+    float dydt = -qps * sqp * st + ct * BSQP;
+    float dzdt = qps * cqp;
+    vec3 r = vec3(BSQP * ct, BSQP * st, segmentRadius * sqp);
+    vec3 drdt = vec3(dxdt, dydt, dzdt);
+    vec3 v1 = normalize(cross(r, drdt));
+    vec3 v2 = normalize(cross(v1, drdt));
+    float cv = cos(uv.y);
+    float sv = sin(uv.y);
+    VertexData res;
+    res.position = vec4(r + tubeRadius * (v1 * sv + v2 * cv), 1);
+    res.normal = vec4(cross(v1 * cv - v2 * sv, drdt), 0);
+    return res; 
+}
+
+const float PI = 3.1415926;
+
+mat3 rotY(float angle){
+    float c = cos(angle), s = sin(angle);
+    return mat3(c, 0 ,-s ,0 ,1 ,0 ,s ,0 ,c);
+}
+mat3 rotZ(float angle){
+    float c = cos(angle), s = sin(angle);
+    return mat3(c, -s, 0, s, c, 0, 0, 0, 1);
+}
+
+void main(){
+    uint index = gl_GlobalInvocationID.y * ubo.numU + gl_GlobalInvocationID.x;
+    vec2 numUV = vec2(ubo.numU, ubo.numV);
+    vec2 ij = vec2(float(index / ubo.numU), float(index % ubo.numU));
+    const vec2 maxUV1 = 2.f * PI * vec2(ubo.p1, 1.f);
+    vec2 uv1 = ij * maxUV1 / (numUV - vec2(1));
+    const vec2 maxUV2 = 2.f * PI * vec2(ubo.p2, 1.f);
+    vec2 uv2 = ij * maxUV2 / (numUV - vec2(1));
+
+    mat3 modelMatrix = rotY(0.5f * ubo.time) * rotZ(0.5f * ubo.time);
+    VertexData v1 = torusKnot(uv1,vec2(ubo.p1, ubo.q1));
+    VertexData v2 = torusKnot(uv2,vec2(ubo.p2, ubo.q2));
+
+    vec3 pos = mix(v1.position.xyz, v2.position.xyz, ubo.morph);
+    vec3 norm = mix(v1.normal.xyz, v2.normal.xyz, ubo.morph);
+
+    VertexData vtx;
+    vtx.position = vec4(pos, 1.f);
+    vtx.normal = vec4(norm, 0.f);
+    vtx.uv = (ij/numUV);
+    vtx.color = vec4(1.f);
+    vbo.vertices[index] = vtx;
+
+}

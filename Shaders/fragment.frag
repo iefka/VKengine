@@ -60,7 +60,7 @@ void main() {
     // qualifier behavior is undefined per GL_EXT_nonuniform_qualifier spec.
     vec4 tex = texture(
     bindlessTextures[nonuniformEXT(mat.diffuseTextureIndex)],
-    vec2(UVcoord.x, 1.0 - UVcoord.y)
+    vec2(UVcoord.x, 1.f - UVcoord.y)
 );
 
     vec3 color = inColor * tex.rgb * mat.diffuseColor.rgb;
@@ -88,5 +88,5 @@ void main() {
    //vec2 checkerUV = UVcoord * 10.0; // scale: try 4, 10, 20 to match tile density
    //float checker = mod(floor(checkerUV.x) + floor(checkerUV.y), 2.0);
    outColor = vec4(diffuseLight * color + specularLight, 1.0);
-   //outColor = vec4(tex.rgb,, 1.0);
+   //outColor = vec4(tex.rgb, 1.0);
 }
