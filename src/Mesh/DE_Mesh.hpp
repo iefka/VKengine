@@ -60,10 +60,9 @@ namespace de {
 			uint32_t resolutionV{ 64 };
 		};
 
-		static std::unique_ptr<Mesh> loadFromComputeShader(
+		static std::unique_ptr<Mesh> prepareForComputeMesh(
 			const Device& device,
 			GeometryPool& geometryPool,
-			const std::filesystem::path& computeShaderPath,
 			const GridDesc& grid
 		);
 
@@ -73,6 +72,7 @@ namespace de {
 
 
 		const std::vector<SubMesh>& getSubMeshes() const noexcept { return subMeshes_; }
+		const GeometryHandle getPositionInPool() const noexcept {return handle_;}
 
 		~Mesh();
 

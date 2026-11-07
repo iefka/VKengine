@@ -5,8 +5,6 @@
 #include"DE_Shaders.hpp"
 #include"DE_Pipeline.hpp"
 #include"DE_PushConstants.hpp"
-#include<iostream>
-
 #include<ranges>
 
 namespace de {
@@ -20,6 +18,9 @@ namespace de {
         if (!baked) { return std::unexpected(baked.error()); }
 
         const auto& geometry = baked->geometry;
+
+        std::size_t zeroOrTiny = 0;
+        std::size_t nonFinite = 0;
 
         auto vertices = std::views::zip(
             geometry.positions, geometry.normals, geometry.colors, geometry.UVs)
@@ -47,10 +48,6 @@ namespace de {
                 };
             }) | std::ranges::to<std::vector>();
 
-        std::cout << objFilepath.filename().string()
-            << ": vertices = " << vertices.size()
-            << ", triangles = " << geometry.indices.size() / 3
-            << '\n';
 
         return LoadResult{
             .mesh = std::move(mesh),
@@ -60,10 +57,9 @@ namespace de {
         };
     }
 
-    std::unique_ptr<Mesh> Mesh::loadFromComputeShader(
+    std::unique_ptr<Mesh> Mesh::prepareForComputeMesh(
         const Device& device,
         GeometryPool& geometryPool,
-        const std::filesystem::path& computeShaderPath, 
         const GridDesc& grid){
         
         auto mesh = std::unique_ptr<Mesh>(new Mesh(device));
@@ -82,7 +78,6 @@ namespace de {
             }
         );
 
-        mesh->dispatchMeshGeneration(computeShaderPath, grid);
         return mesh;
     }
 
@@ -219,16 +214,14 @@ namespace de {
     }
 
     const std::vector<vk::VertexInputAttributeDescription> Mesh::Vertex::getAttributes() noexcept {
-        std::vector<vk::VertexInputAttributeDescription> attributeDescriptions{};
 
         return {
             {0, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Vertex, position)},
-            {1, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Vertex, color)},   // было normal
-            {2, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Vertex, normal)},  // было color
+            {1, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Vertex, color)},  
+            {2, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Vertex, normal)},  
             {3, 0, vk::Format::eR32G32Sfloat,       offsetof(Vertex, uv)},
         };
 
-        return attributeDescriptions;
     }
     Mesh::~Mesh() {
         if (pool_) {
