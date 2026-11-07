@@ -238,15 +238,26 @@ namespace de{
 		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingSampledImageUpdateAfterBind == false) {
 			throw std::runtime_error("descriptorBindingSampledImageUpdateAfterBind feature is not suported");
 		}
+		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingStorageBufferUpdateAfterBind == false) {
+			throw std::runtime_error("descriptorBindingStorageBufferUpdateAfterBind feature is not suported");
+		}
+		if (featuresChainCheck.get<vk::PhysicalDeviceFeatures2>().features.drawIndirectFirstInstance == false) {
+			throw std::runtime_error(
+				"drawIndirectFirstInstance feature is not supported");
+		}
+		
 
 		featuresChainEnable.get<vk::PhysicalDeviceFeatures2>().features.samplerAnisotropy = vk::True;
+		featuresChainEnable.get<vk::PhysicalDeviceFeatures2>().features.drawIndirectFirstInstance = vk::True;
 		featuresChainEnable.get<vk::PhysicalDeviceFeatures2>().features.multiDrawIndirect = vk::True;
 		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().shaderSampledImageArrayNonUniformIndexing = vk::True;
 		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingPartiallyBound = vk::True;
 		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().runtimeDescriptorArray = vk::True;
 		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingVariableDescriptorCount = vk::True;
 		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingSampledImageUpdateAfterBind = vk::True;
-		
+		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingStorageBufferUpdateAfterBind = vk::True;
+
+
 		const auto deviceCreateInfo = vk::DeviceCreateInfo{}
 			.setPNext(&featuresChainEnable.get<vk::PhysicalDeviceFeatures2>())
 			.setQueueCreateInfos(queueCreateInfos)
