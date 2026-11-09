@@ -1,4 +1,13 @@
 #version 450
+
+// The P/Q pair (11, 11) is reserved for the logo shape.
+// Either endpoint can use the logo, so the existing morph also works in reverse.
+// The logo contour and triangle strip are baked from the reference image.
+// Its front and back, outer rim, and four cutout walls use the existing indices.
+// The baked strip requires numU >= 976 and numV >= 2. For a smaller valid grid,
+// (11, 11) falls back to an ordinary torus knot.
+// Most triangles collapse at the logo endpoint; the index count is unchanged.
+
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 struct VertexData{
@@ -18,7 +27,11 @@ layout(std140, set = 0, binding = 0) uniform MeshBuffer{
     uint p1, p2;
     uint q1, q2;
     float morph;
-    float _padding[4];
+    // Four consecutive floats match the unused padding in the host UBO.
+    float _padding0;
+    float _padding1;
+    float _padding2;
+    float _padding3;
 }ubo;
 
 layout (set = 0, binding = 1) buffer VertexBuffer{
@@ -52,10 +65,646 @@ VertexData torusKnot(vec2 uv, vec2 pq){
     VertexData res;
     res.position = vec4(r + tubeRadius * (v1 * sv + v2 * cv), 1);
     res.normal = vec4(cross(v1 * cv - v2 * sv, drdt), 0);
-    return res; 
+    res.color = vec4(1.0);
+    res.uv = vec2(0.0);
+    res._padding = vec2(0.0);
+    return res;
 }
 
 const float PI = 3.1415926;
+
+// The logo uses a triangle strip baked from the supplied reference image.
+// Only the first grid row spans the triangle strip at the logo endpoint.
+// Every later grid row duplicates the previous row and forms degenerate triangles.
+// It uses the existing grid indices, but requires numU >= 976 and numV >= 2.
+// Positions are normalized; the scale is selected below.
+const uint LOGO_STRIP_COUNT = 1952u;
+const uint LOGO_MIN_U = 976u;
+const float LOGO_RADIUS = 8.0;
+
+vec4 logoPointChunk0(uint pointIndex)
+{
+    switch (pointIndex) {
+        case 0u: return vec4(1.00000000, 0.0, 1.00000000, 0.0);
+        case 1u: return vec4(0.99879546, 0.04906767, 0.99879546, 0.04906767);
+        case 2u: return vec4(0.99518473, 0.09801714, 0.99518473, 0.09801714);
+        case 3u: return vec4(0.98917651, 0.14673047, 0.98917651, 0.14673047);
+        case 4u: return vec4(0.98078528, 0.19509032, 0.98078528, 0.19509032);
+        case 5u: return vec4(0.97003125, 0.24298018, 0.97003125, 0.24298018);
+        case 6u: return vec4(0.95694034, 0.29028468, 0.95694034, 0.29028468);
+        case 7u: return vec4(0.94154407, 0.33688985, 0.94154407, 0.33688985);
+        case 8u: return vec4(0.92387953, 0.38268343, 0.92387953, 0.38268343);
+        case 9u: return vec4(0.90398929, 0.42755509, 0.90398929, 0.42755509);
+        case 10u: return vec4(0.88192126, 0.47139674, 0.88192126, 0.47139674);
+        case 11u: return vec4(0.85772861, 0.51410274, 0.85772861, 0.51410274);
+        case 12u: return vec4(0.83146961, 0.55557023, 0.83146961, 0.55557023);
+        case 13u: return vec4(0.80320753, 0.59569930, 0.80320753, 0.59569930);
+        case 14u: return vec4(0.77301045, 0.63439328, 0.77301045, 0.63439328);
+        case 15u: return vec4(0.74095113, 0.67155895, 0.74095113, 0.67155895);
+        case 16u: return vec4(0.70710678, 0.70710678, 0.70710678, 0.70710678);
+        case 17u: return vec4(0.67155895, 0.74095113, 0.67155895, 0.74095113);
+        case 18u: return vec4(0.63439328, 0.77301045, 0.63439328, 0.77301045);
+        case 19u: return vec4(0.59569930, 0.80320753, 0.59569930, 0.80320753);
+        case 20u: return vec4(0.55557023, 0.83146961, 0.55557023, 0.83146961);
+        case 21u: return vec4(0.51410274, 0.85772861, 0.51410274, 0.85772861);
+        case 22u: return vec4(0.47139674, 0.88192126, 0.47139674, 0.88192126);
+        case 23u: return vec4(0.42755509, 0.90398929, 0.42755509, 0.90398929);
+        case 24u: return vec4(0.38268343, 0.92387953, 0.38268343, 0.92387953);
+        case 25u: return vec4(0.33688985, 0.94154407, 0.33688985, 0.94154407);
+        case 26u: return vec4(0.29028468, 0.95694034, 0.29028468, 0.95694034);
+        case 27u: return vec4(0.24298018, 0.97003125, 0.24298018, 0.97003125);
+        case 28u: return vec4(0.19509032, 0.98078528, 0.19509032, 0.98078528);
+        case 29u: return vec4(0.14673047, 0.98917651, 0.14673047, 0.98917651);
+        case 30u: return vec4(0.09801714, 0.99518473, 0.09801714, 0.99518473);
+        case 31u: return vec4(0.04906767, 0.99879546, 0.04906767, 0.99879546);
+        case 32u: return vec4(0.0, 1.00000000, 0.0, 1.00000000);
+        case 33u: return vec4(-0.04906767, 0.99879546, -0.04906767, 0.99879546);
+        case 34u: return vec4(-0.09801714, 0.99518473, -0.09801714, 0.99518473);
+        case 35u: return vec4(-0.14673047, 0.98917651, -0.14673047, 0.98917651);
+        case 36u: return vec4(-0.19509032, 0.98078528, -0.19509032, 0.98078528);
+        case 37u: return vec4(-0.24298018, 0.97003125, -0.24298018, 0.97003125);
+        case 38u: return vec4(-0.29028468, 0.95694034, -0.29028468, 0.95694034);
+        case 39u: return vec4(-0.33688985, 0.94154407, -0.33688985, 0.94154407);
+        case 40u: return vec4(-0.38268343, 0.92387953, -0.38268343, 0.92387953);
+        case 41u: return vec4(-0.42755509, 0.90398929, -0.42755509, 0.90398929);
+        case 42u: return vec4(-0.47139674, 0.88192126, -0.47139674, 0.88192126);
+        case 43u: return vec4(-0.51410274, 0.85772861, -0.51410274, 0.85772861);
+        case 44u: return vec4(-0.55557023, 0.83146961, -0.55557023, 0.83146961);
+        case 45u: return vec4(-0.59569930, 0.80320753, -0.59569930, 0.80320753);
+        case 46u: return vec4(-0.63439328, 0.77301045, -0.63439328, 0.77301045);
+        case 47u: return vec4(-0.67155895, 0.74095113, -0.67155895, 0.74095113);
+        case 48u: return vec4(-0.70710678, 0.70710678, -0.70710678, 0.70710678);
+        case 49u: return vec4(-0.74095113, 0.67155895, -0.74095113, 0.67155895);
+        case 50u: return vec4(-0.77301045, 0.63439328, -0.77301045, 0.63439328);
+        case 51u: return vec4(-0.80320753, 0.59569930, -0.80320753, 0.59569930);
+        case 52u: return vec4(-0.83146961, 0.55557023, -0.83146961, 0.55557023);
+        case 53u: return vec4(-0.85772861, 0.51410274, -0.85772861, 0.51410274);
+        case 54u: return vec4(-0.88192126, 0.47139674, -0.88192126, 0.47139674);
+        case 55u: return vec4(-0.90398929, 0.42755509, -0.90398929, 0.42755509);
+        case 56u: return vec4(-0.92387953, 0.38268343, -0.92387953, 0.38268343);
+        case 57u: return vec4(-0.94154407, 0.33688985, -0.94154407, 0.33688985);
+        case 58u: return vec4(-0.95694034, 0.29028468, -0.95694034, 0.29028468);
+        case 59u: return vec4(-0.97003125, 0.24298018, -0.97003125, 0.24298018);
+        case 60u: return vec4(-0.98078528, 0.19509032, -0.98078528, 0.19509032);
+        case 61u: return vec4(-0.98917651, 0.14673047, -0.98917651, 0.14673047);
+        case 62u: return vec4(-0.99518473, 0.09801714, -0.99518473, 0.09801714);
+        case 63u: return vec4(-0.99879546, 0.04906767, -0.99879546, 0.04906767);
+        default: return vec4(0u);
+    }
+}
+
+vec4 logoPointChunk1(uint pointIndex)
+{
+    switch (pointIndex) {
+        case 64u: return vec4(-1.00000000, 0.0, -1.00000000, 0.0);
+        case 65u: return vec4(-0.99879546, -0.04906767, -0.99879546, -0.04906767);
+        case 66u: return vec4(-0.99518473, -0.09801714, -0.99518473, -0.09801714);
+        case 67u: return vec4(-0.98917651, -0.14673047, -0.98917651, -0.14673047);
+        case 68u: return vec4(-0.98078528, -0.19509032, -0.98078528, -0.19509032);
+        case 69u: return vec4(-0.97003125, -0.24298018, -0.97003125, -0.24298018);
+        case 70u: return vec4(-0.95694034, -0.29028468, -0.95694034, -0.29028468);
+        case 71u: return vec4(-0.94154407, -0.33688985, -0.94154407, -0.33688985);
+        case 72u: return vec4(-0.92387953, -0.38268343, -0.92387953, -0.38268343);
+        case 73u: return vec4(-0.90398929, -0.42755509, -0.90398929, -0.42755509);
+        case 74u: return vec4(-0.88192126, -0.47139674, -0.88192126, -0.47139674);
+        case 75u: return vec4(-0.85772861, -0.51410274, -0.85772861, -0.51410274);
+        case 76u: return vec4(-0.83146961, -0.55557023, -0.83146961, -0.55557023);
+        case 77u: return vec4(-0.80320753, -0.59569930, -0.80320753, -0.59569930);
+        case 78u: return vec4(-0.77301045, -0.63439328, -0.77301045, -0.63439328);
+        case 79u: return vec4(-0.74095113, -0.67155895, -0.74095113, -0.67155895);
+        case 80u: return vec4(-0.70710678, -0.70710678, -0.70710678, -0.70710678);
+        case 81u: return vec4(-0.67155895, -0.74095113, -0.67155895, -0.74095113);
+        case 82u: return vec4(-0.63439328, -0.77301045, -0.63439328, -0.77301045);
+        case 83u: return vec4(-0.59569930, -0.80320753, -0.59569930, -0.80320753);
+        case 84u: return vec4(-0.55557023, -0.83146961, -0.55557023, -0.83146961);
+        case 85u: return vec4(-0.51410274, -0.85772861, -0.51410274, -0.85772861);
+        case 86u: return vec4(-0.47139674, -0.88192126, -0.47139674, -0.88192126);
+        case 87u: return vec4(-0.42755509, -0.90398929, -0.42755509, -0.90398929);
+        case 88u: return vec4(-0.38268343, -0.92387953, -0.38268343, -0.92387953);
+        case 89u: return vec4(-0.33688985, -0.94154407, -0.33688985, -0.94154407);
+        case 90u: return vec4(-0.29028468, -0.95694034, -0.29028468, -0.95694034);
+        case 91u: return vec4(-0.24298018, -0.97003125, -0.24298018, -0.97003125);
+        case 92u: return vec4(-0.19509032, -0.98078528, -0.19509032, -0.98078528);
+        case 93u: return vec4(-0.14673047, -0.98917651, -0.14673047, -0.98917651);
+        case 94u: return vec4(-0.09801714, -0.99518473, -0.09801714, -0.99518473);
+        case 95u: return vec4(-0.04906767, -0.99879546, -0.04906767, -0.99879546);
+        case 96u: return vec4(0.0, -1.00000000, 0.0, -1.00000000);
+        case 97u: return vec4(0.04906767, -0.99879546, 0.04906767, -0.99879546);
+        case 98u: return vec4(0.09801714, -0.99518473, 0.09801714, -0.99518473);
+        case 99u: return vec4(0.14673047, -0.98917651, 0.14673047, -0.98917651);
+        case 100u: return vec4(0.19509032, -0.98078528, 0.19509032, -0.98078528);
+        case 101u: return vec4(0.24298018, -0.97003125, 0.24298018, -0.97003125);
+        case 102u: return vec4(0.29028468, -0.95694034, 0.29028468, -0.95694034);
+        case 103u: return vec4(0.33688985, -0.94154407, 0.33688985, -0.94154407);
+        case 104u: return vec4(0.38268343, -0.92387953, 0.38268343, -0.92387953);
+        case 105u: return vec4(0.42755509, -0.90398929, 0.42755509, -0.90398929);
+        case 106u: return vec4(0.47139674, -0.88192126, 0.47139674, -0.88192126);
+        case 107u: return vec4(0.51410274, -0.85772861, 0.51410274, -0.85772861);
+        case 108u: return vec4(0.55557023, -0.83146961, 0.55557023, -0.83146961);
+        case 109u: return vec4(0.59569930, -0.80320753, 0.59569930, -0.80320753);
+        case 110u: return vec4(0.63439328, -0.77301045, 0.63439328, -0.77301045);
+        case 111u: return vec4(0.67155895, -0.74095113, 0.67155895, -0.74095113);
+        case 112u: return vec4(0.70710678, -0.70710678, 0.70710678, -0.70710678);
+        case 113u: return vec4(0.74095113, -0.67155895, 0.74095113, -0.67155895);
+        case 114u: return vec4(0.77301045, -0.63439328, 0.77301045, -0.63439328);
+        case 115u: return vec4(0.80320753, -0.59569930, 0.80320753, -0.59569930);
+        case 116u: return vec4(0.83146961, -0.55557023, 0.83146961, -0.55557023);
+        case 117u: return vec4(0.85772861, -0.51410274, 0.85772861, -0.51410274);
+        case 118u: return vec4(0.88192126, -0.47139674, 0.88192126, -0.47139674);
+        case 119u: return vec4(0.90398929, -0.42755509, 0.90398929, -0.42755509);
+        case 120u: return vec4(0.92387953, -0.38268343, 0.92387953, -0.38268343);
+        case 121u: return vec4(0.94154407, -0.33688985, 0.94154407, -0.33688985);
+        case 122u: return vec4(0.95694034, -0.29028468, 0.95694034, -0.29028468);
+        case 123u: return vec4(0.97003125, -0.24298018, 0.97003125, -0.24298018);
+        case 124u: return vec4(0.98078528, -0.19509032, 0.98078528, -0.19509032);
+        case 125u: return vec4(0.98917651, -0.14673047, 0.98917651, -0.14673047);
+        case 126u: return vec4(0.99518473, -0.09801714, 0.99518473, -0.09801714);
+        case 127u: return vec4(0.99879546, -0.04906767, 0.99879546, -0.04906767);
+        default: return vec4(0u);
+    }
+}
+
+vec4 logoPointChunk2(uint pointIndex)
+{
+    switch (pointIndex) {
+        case 128u: return vec4(-0.29963899, 0.25992780, 0.82491480, -0.56525709);
+        case 129u: return vec4(-0.23826715, 0.33032491, 0.68241269, -0.73096712);
+        case 130u: return vec4(-0.17870036, 0.37545126, 0.52778427, -0.84937846);
+        case 131u: return vec4(-0.12454874, 0.40252708, 0.38798650, -0.92166506);
+        case 132u: return vec4(-0.07761733, 0.41877256, 0.27246749, -0.96216499);
+        case 133u: return vec4(-0.02888087, 0.42960289, 0.11814777, -0.99299602);
+        case 134u: return vec4(0.07039711, 0.43140794, -0.08639448, -0.99626101);
+        case 135u: return vec4(0.12635379, 0.42057762, -0.25864766, -0.96597173);
+        case 136u: return vec4(0.17870036, 0.40252708, -0.38744042, -0.92189474);
+        case 137u: return vec4(0.23646209, 0.37364621, -0.51580630, -0.85670524);
+        case 138u: return vec4(0.27436823, 0.34657040, -0.62711561, -0.77892620);
+        case 139u: return vec4(0.31227437, 0.31227437, -0.72134952, -0.69257120);
+        case 140u: return vec4(0.34837545, 0.26895307, -0.81978146, -0.57267649);
+        case 141u: return vec4(0.38808664, 0.20036101, -0.90679600, -0.42156971);
+        case 142u: return vec4(0.40433213, 0.15523466, -0.96408980, -0.26557645);
+        case 143u: return vec4(0.41696751, 0.09025271, -0.99539324, -0.09587651);
+        case 144u: return vec4(0.41696751, 0.05054152, -0.71350502, 0.70065012);
+        case 145u: return vec4(0.31768953, 0.04873646, 0.48476853, 0.87464248);
+        case 146u: return vec4(0.31227437, 0.05776173, 0.96371493, 0.26693358);
+        case 147u: return vec4(0.31227437, 0.08122744, 0.99427772, 0.10682611);
+        case 148u: return vec4(0.30324910, 0.12274368, 0.95723017, 0.28932749);
+        case 149u: return vec4(0.28700361, 0.16425993, 0.90473330, 0.42597847);
+        case 150u: return vec4(0.26895307, 0.19675090, 0.83422481, 0.55142449);
+        case 151u: return vec4(0.24368231, 0.22924188, 0.74967818, 0.66180256);
+        case 152u: return vec4(0.21480144, 0.25812274, 0.64368425, 0.76529118);
+        case 153u: return vec4(0.16606498, 0.29241877, 0.49816814, 0.86708045);
+        case 154u: return vec4(0.12274368, 0.31227437, 0.32142762, 0.94693415);
+        case 155u: return vec4(0.05956679, 0.32671480, 0.11211934, 0.99369475);
+        case 156u: return vec4(-0.00541516, 0.32671480, -0.09853762, 0.99513333);
+        case 157u: return vec4(-0.05054152, 0.31768953, -0.29661261, 0.95499789);
+        case 158u: return vec4(-0.11371841, 0.29061372, -0.49324601, 0.86988986);
+        case 159u: return vec4(-0.16606498, 0.25270758, -0.66765150, 0.74447396);
+        case 160u: return vec4(-0.20036101, 0.21480144, -0.77892620, 0.62711561);
+        case 161u: return vec4(-0.21841155, 0.18953069, -0.86671300, 0.49880716);
+        case 162u: return vec4(-0.24368231, 0.13357401, -0.94020297, 0.34061471);
+        case 163u: return vec4(-0.25270758, 0.10108303, -0.98053056, 0.19636653);
+        case 164u: return vec4(-0.25631769, 0.07220217, -0.99806760, 0.06213744);
+        case 165u: return vec4(-0.25631769, 0.02166065, -0.99828618, -0.05852092);
+        case 166u: return vec4(-0.25270758, -0.00902527, -0.97697533, -0.21335230);
+        case 167u: return vec4(-0.23285199, -0.07039711, -0.92050347, -0.39073440);
+        case 168u: return vec4(-0.21841155, -0.09747292, -0.84758598, -0.53065809);
+        case 169u: return vec4(-0.18953069, -0.13718412, -0.76025081, -0.64962967);
+        case 170u: return vec4(-0.15523466, -0.17148014, -0.63118284, -0.77563408);
+        case 171u: return vec4(-0.09747292, -0.20938628, -0.46233910, -0.88670319);
+        case 172u: return vec4(-0.05234657, -0.22743682, -0.29292398, -0.95613574);
+        case 173u: return vec4(-0.01083032, -0.23646209, -0.10782433, -0.99416996);
+        case 174u: return vec4(0.88808664, -0.23826715, -0.70136614, -0.71280119);
+        case 175u: return vec4(0.88989170, -0.33754513, -0.92731987, 0.37426976);
+        case 176u: return vec4(0.88628159, -0.34115523, -0.38268343, 0.92387953);
+        case 177u: return vec4(0.01083032, -0.34115523, 0.06536706, 0.99786129);
+        case 178u: return vec4(-0.05776173, -0.33212996, 0.21206409, 0.97725576);
+        case 179u: return vec4(-0.12274368, -0.31227437, 0.36285108, 0.93184714);
+        case 180u: return vec4(-0.16425993, -0.29241877, 0.48148866, 0.87645232);
+        case 181u: return vec4(-0.19314079, -0.27436823, 0.57142724, 0.82065273);
+        case 182u: return vec4(-0.23285199, -0.24368231, 0.66061929, 0.75072109);
+        case 183u: return vec4(-0.26534296, -0.21119134, 0.74512802, 0.66692146);
+        case 184u: return vec4(-0.30144404, -0.16606498, 0.83957488, 0.54324398);
+        case 185u: return vec4(-0.33754513, -0.09566787, 0.91967361, 0.39268364);
+        case 186u: return vec4(-0.35379061, -0.04873646, 0.96685689, 0.25531894);
+        case 187u: return vec4(-0.36281588, 0.0, 0.99452289, 0.10451903);
+        case 188u: return vec4(-0.36462094, 0.06859206, 0.99833041, -0.05776150);
+        case 189u: return vec4(-0.35559567, 0.13176895, 0.97324899, -0.22975292);
+        case 190u: return vec4(-0.33574007, 0.19133574, 0.91984379, -0.39228486);
+        case 191u: return vec4(-0.19494585, 0.16245487, 0.88488560, -0.46580842);
+        default: return vec4(0u);
+    }
+}
+
+vec4 logoPointChunk3(uint pointIndex)
+{
+    switch (pointIndex) {
+        case 192u: return vec4(-0.17509025, 0.19314079, 0.78492226, -0.61959426);
+        case 193u: return vec4(-0.13718412, 0.23285199, 0.65370748, -0.75674734);
+        case 194u: return vec4(-0.09386282, 0.26353791, 0.49097810, -0.87117191);
+        case 195u: return vec4(-0.05234657, 0.28158845, 0.31152927, -0.95023656);
+        case 196u: return vec4(-0.01263538, 0.29061372, 0.12654498, -0.99196087);
+        case 197u: return vec4(0.04693141, 0.29241877, -0.04017092, -0.99919282);
+        case 198u: return vec4(0.07942238, 0.28880866, -0.20433931, -0.97890012);
+        case 199u: return vec4(0.13176895, 0.27256318, -0.40122883, -0.91597785);
+        case 200u: return vec4(0.16606498, 0.25270758, -0.56002914, -0.82847291);
+        case 201u: return vec4(0.20758123, 0.22021661, -0.69346901, -0.72048646);
+        case 202u: return vec4(0.22743682, 0.19675090, -0.79902174, -0.60130213);
+        case 203u: return vec4(0.24548736, 0.16967509, -0.86491009, -0.50192682);
+        case 204u: return vec4(0.26353791, 0.13357401, -0.92688732, -0.37533970);
+        case 205u: return vec4(0.27436823, 0.09927798, -0.98175306, -0.19016026);
+        case 206u: return vec4(0.27797834, 0.05234657, -0.89913338, 0.43767473);
+        case 207u: return vec4(0.27256318, 0.04873646, -0.28978415, 0.95709203);
+        case 208u: return vec4(0.17689531, 0.04873646, 0.49269881, 0.87019991);
+        case 209u: return vec4(0.17148014, 0.05776173, 0.96371493, 0.26693358);
+        case 210u: return vec4(0.17148014, 0.06859206, 0.99083750, 0.13505941);
+        case 211u: return vec4(0.16245487, 0.10108303, 0.91883300, 0.39464658);
+        case 212u: return vec4(0.14620939, 0.12815884, 0.79802512, 0.60262418);
+        case 213u: return vec4(0.11913357, 0.15703971, 0.62804025, 0.77818085);
+        case 214u: return vec4(0.08303249, 0.17870036, 0.40157455, 0.91582634);
+        case 215u: return vec4(0.05234657, 0.18772563, 0.16721569, 0.98592034);
+        case 216u: return vec4(0.01624549, 0.18953069, -0.05132291, 0.99868211);
+        case 217u: return vec4(-0.00722022, 0.18592058, -0.24809199, 0.96873648);
+        case 218u: return vec4(-0.02707581, 0.17870036, -0.41499268, 0.90982475);
+        case 219u: return vec4(-0.05956679, 0.16064982, -0.60219551, 0.79834865);
+        case 220u: return vec4(-0.08664260, 0.13357401, -0.77334214, 0.63398891);
+        case 221u: return vec4(-0.10469314, 0.10649819, -0.88502227, 0.46554870);
+        case 222u: return vec4(-0.11191336, 0.08844765, -0.96024238, 0.27916763);
+        case 223u: return vec4(-0.11732852, 0.05956679, -0.99844891, 0.05567565);
+        case 224u: return vec4(-0.11371841, 0.01083032, -0.97536754, -0.22058594);
+        case 225u: return vec4(-0.10108303, -0.02166065, -0.88317012, -0.46905280);
+        case 226u: return vec4(-0.08483755, -0.04512635, -0.75064210, -0.66070904);
+        case 227u: return vec4(-0.04873646, -0.07761733, -0.54779079, -0.83661535);
+        case 228u: return vec4(-0.00902527, -0.09566787, -0.27201969, -0.96229169);
+        case 229u: return vec4(0.01985560, -0.09927798, -0.06213744, -0.99806760);
+        case 230u: return vec4(0.88808664, -0.09927798, -0.70065012, -0.71350502);
+        case 231u: return vec4(0.88989170, -0.19855596, -0.92731987, 0.37426976);
+        case 232u: return vec4(0.88628159, -0.20216606, -0.38268343, 0.92387953);
+        case 233u: return vec4(0.02346570, -0.20216606, 0.03990439, 0.99920350);
+        case 234u: return vec4(-0.02166065, -0.19855596, 0.22814127, 0.97362804);
+        case 235u: return vec4(-0.03971119, -0.19133574, 0.24312071, 0.96999604);
+        case 236u: return vec4(-0.05595668, -0.18953069, 0.27479971, 0.96150149);
+        case 237u: return vec4(-0.09747292, -0.16967509, 0.50656942, 0.86219918);
+        case 238u: return vec4(-0.14079422, -0.13898917, 0.66286527, 0.74873870);
+        case 239u: return vec4(-0.17689531, -0.09927798, 0.79716750, 0.60375821);
+        case 240u: return vec4(-0.19494585, -0.07039711, 0.88851616, 0.45884533);
+        case 241u: return vec4(-0.21299639, -0.02707581, 0.95401919, 0.29974552);
+        case 242u: return vec4(-0.22202166, 0.01444043, 0.99427772, 0.10682611);
+        case 243u: return vec4(-0.22202166, 0.07581227, 0.99473122, -0.10251727);
+        case 244u: return vec4(-0.21299639, 0.11913357, 0.95530893, -0.29560929);
+        case 245u: return vec4(-0.49097473, 0.43140794, -0.28978415, -0.95709203);
+        case 246u: return vec4(-0.48555957, 0.42779783, -0.88167460, -0.47185793);
+        case 247u: return vec4(-0.48555957, -0.33754513, -0.99250756, 0.12218326);
+        case 248u: return vec4(-0.48736462, -0.34476534, -0.78004181, 0.62572739);
+        case 249u: return vec4(-0.49097473, -0.34657040, -0.22975292, 0.97324899);
+        case 250u: return vec4(-0.59025271, -0.34657040, 0.38268343, 0.92387953);
+        case 251u: return vec4(-0.59386282, -0.34296029, 0.92387953, 0.38268343);
+        case 252u: return vec4(-0.59386282, 0.32129964, 0.92387953, 0.38268343);
+        case 253u: return vec4(-0.59927798, 0.32671480, 0.45758158, 0.88916764);
+        case 254u: return vec4(-0.61010830, 0.32851986, 0.07668529, 0.99705535);
+        case 255u: return vec4(-0.76534296, 0.32671480, 0.22409090, 0.97456825);
+        default: return vec4(0u);
+    }
+}
+
+vec4 logoPointChunk4(uint pointIndex)
+{
+    switch (pointIndex) {
+        case 256u: return vec4(-0.77256318, 0.33032491, 0.85065081, 0.52573111);
+        case 257u: return vec4(-0.77256318, 0.42779783, 0.92387953, -0.38268343);
+        case 258u: return vec4(-0.76895307, 0.43140794, 0.38268343, -0.92387953);
+        case 259u: return vec4(-0.64620939, 0.29061372, -0.07878896, -0.99689132);
+        case 260u: return vec4(-0.63537906, 0.28880866, -0.59410191, -0.80438978);
+        case 261u: return vec4(-0.63357401, 0.28519856, -0.97357621, -0.22836233);
+        case 262u: return vec4(-0.63537906, -0.34657040, -0.69996591, 0.71417626);
+        case 263u: return vec4(-0.74007220, -0.34476534, 0.71317558, 0.70098544);
+        case 264u: return vec4(-0.74007220, 0.17509025, 0.90851290, 0.41785681);
+        case 265u: return vec4(-0.75270758, 0.18592058, 0.34694625, 0.93788501);
+        case 266u: return vec4(-0.88808664, 0.18592058, 0.38268343, 0.92387953);
+        case 267u: return vec4(-0.89169675, 0.18953069, 0.92731987, 0.37426976);
+        case 268u: return vec4(-0.88989170, 0.28880866, 0.70328787, -0.71090517);
+        default: return vec4(0u);
+    }
+}
+
+vec4 logoPoint(uint pointIndex)
+{
+    if (pointIndex < 64u) return logoPointChunk0(pointIndex);
+    else if (pointIndex < 128u) return logoPointChunk1(pointIndex);
+    else if (pointIndex < 192u) return logoPointChunk2(pointIndex);
+    else if (pointIndex < 256u) return logoPointChunk3(pointIndex);
+    else if (pointIndex < 269u) return logoPointChunk4(pointIndex);
+    return vec4(0u);
+}
+
+uvec4 logoStripBlockChunk0(uint blockIndex)
+{
+    switch (blockIndex) {
+        case 0u: return uvec4(1934252u, 1418152u, 1426340u, 983968u);
+        case 1u: return uvec4(1885084u, 1164184u, 1172024u, 1179700u);
+        case 2u: return uvec4(1188760u, 1196856u, 1671988u, 2073392u);
+        case 3u: return uvec4(2081780u, 2147308u, 984040u, 1450980u);
+        case 4u: return uvec4(1458888u, 1516260u, 1524452u, 1532896u);
+        case 5u: return uvec4(1541084u, 1549272u, 1557240u, 1860492u);
+        case 6u: return uvec4(1868684u, 1876804u, 1884992u, 1688380u);
+        case 7u: return uvec4(484152u, 491756u, 499944u, 2155564u);
+        case 8u: return uvec4(2171944u, 1991716u, 1999820u, 1565332u);
+        case 9u: return uvec4(1573508u, 1581828u, 2188332u, 2196524u);
+        case 10u: return uvec4(2121960u, 2130936u, 2139156u, 2098176u);
+        case 11u: return uvec4(2106368u, 2113756u, 2007092u, 2016216u);
+        case 12u: return uvec4(1081872u, 1090064u, 1098712u, 1105972u);
+        case 13u: return uvec4(1114656u, 1614612u, 1622804u, 1630832u);
+        case 14u: return uvec4(1639008u, 1647396u, 1934256u, 1942448u);
+        case 15u: return uvec4(1950388u, 1958568u, 1967040u, 1475280u);
+        case 16u: return uvec4(1483472u, 1491940u, 1500128u, 1508064u);
+        case 17u: return uvec4(2089980u, 2098172u, 450792u, 458980u);
+        case 18u: return uvec4(1229024u, 1237592u, 1245768u, 1663792u);
+        case 19u: return uvec4(1303340u, 1311356u, 1319536u, 1581832u);
+        case 20u: return uvec4(1721092u, 1729352u, 1737540u, 1745748u);
+        case 21u: return uvec4(1745748u, 1753940u, 1762116u, 1770336u);
+        case 22u: return uvec4(1770336u, 1778528u, 1786692u, 1794924u);
+        case 23u: return uvec4(1794924u, 1803116u, 1811268u, 1819512u);
+        case 24u: return uvec4(1819512u, 1827704u, 1835844u, 1844100u);
+        case 25u: return uvec4(1983432u, 1352648u, 1360836u, 1368732u);
+        case 26u: return uvec4(1368732u, 1376924u, 1385412u, 1393320u);
+        case 27u: return uvec4(499956u, 508148u, 517148u, 524544u);
+        case 28u: return uvec4(524544u, 532736u, 541724u, 549132u);
+        case 29u: return uvec4(549132u, 557324u, 566300u, 573720u);
+        case 30u: return uvec4(573720u, 581912u, 590876u, 598308u);
+        case 31u: return uvec4(598308u, 606500u, 615452u, 622896u);
+        case 32u: return uvec4(622896u, 631088u, 640028u, 647484u);
+        case 33u: return uvec4(647484u, 655676u, 664604u, 672072u);
+        case 34u: return uvec4(672072u, 680264u, 689180u, 696660u);
+        case 35u: return uvec4(696660u, 704852u, 713756u, 721248u);
+        case 36u: return uvec4(721248u, 729440u, 738332u, 745836u);
+        case 37u: return uvec4(745836u, 754028u, 762908u, 770424u);
+        case 38u: return uvec4(770424u, 778616u, 787484u, 795012u);
+        case 39u: return uvec4(795012u, 803204u, 812060u, 819600u);
+        case 40u: return uvec4(819600u, 827792u, 836636u, 844188u);
+        case 41u: return uvec4(844188u, 852380u, 861212u, 868776u);
+        case 42u: return uvec4(868776u, 876968u, 885788u, 893364u);
+        case 43u: return uvec4(893364u, 901556u, 910364u, 917952u);
+        case 44u: return uvec4(917952u, 926144u, 934940u, 942540u);
+        case 45u: return uvec4(942540u, 950732u, 959516u, 967128u);
+        case 46u: return uvec4(967128u, 975320u, 984092u, 2147352u);
+        case 47u: return uvec4(991716u, 999908u, 1008096u, 1016304u);
+        case 48u: return uvec4(1016304u, 1024496u, 1032672u, 1040892u);
+        case 49u: return uvec4(1040892u, 508u, 8672u, 16392u);
+        case 50u: return uvec4(16392u, 24584u, 33248u, 40980u);
+        case 51u: return uvec4(40980u, 49172u, 57824u, 65568u);
+        case 52u: return uvec4(65568u, 73760u, 82400u, 90156u);
+        case 53u: return uvec4(90156u, 98348u, 106976u, 1885080u);
+        case 54u: return uvec4(114744u, 122936u, 131124u, 139332u);
+        case 55u: return uvec4(139332u, 147524u, 155700u, 163920u);
+        case 56u: return uvec4(163920u, 172112u, 180276u, 188508u);
+        case 57u: return uvec4(188508u, 196700u, 204852u, 213096u);
+        case 58u: return uvec4(213096u, 221288u, 229428u, 237684u);
+        case 59u: return uvec4(237684u, 245876u, 254004u, 262272u);
+        case 60u: return uvec4(262272u, 270464u, 278580u, 286860u);
+        case 61u: return uvec4(286860u, 295052u, 303156u, 311448u);
+        case 62u: return uvec4(311448u, 319640u, 327732u, 336036u);
+        case 63u: return uvec4(336036u, 344228u, 352308u, 360624u);
+        default: return uvec4(0u);
+    }
+}
+
+uvec4 logoStripBlockChunk1(uint blockIndex)
+{
+    switch (blockIndex) {
+        case 64u: return uvec4(360624u, 368816u, 376884u, 385212u);
+        case 65u: return uvec4(385212u, 393404u, 401460u, 409800u);
+        case 66u: return uvec4(409800u, 417992u, 426036u, 434388u);
+        case 67u: return uvec4(1557240u, 1049336u, 1057752u, 1065480u);
+        case 68u: return uvec4(1204812u, 1213004u, 1221192u, 1229400u);
+        case 69u: return uvec4(1253988u, 1262180u, 1270368u, 1278576u);
+        case 70u: return uvec4(1327752u, 1335944u, 1344132u, 1352340u);
+        case 71u: return uvec4(1114656u, 1122848u, 1130548u, 1139244u);
+        case 72u: return uvec4(1139244u, 1147436u, 1155124u, 1163832u);
+        case 73u: return uvec4(1590024u, 1598216u, 1606256u, 1614612u);
+        case 74u: return uvec4(1426104u, 1434296u, 1442272u, 1450692u);
+        case 75u: return uvec4(1844100u, 1852292u, 1860420u, 1401740u);
+        case 76u: return uvec4(1409708u, 1417896u, 434868u, 442580u);
+        case 77u: return uvec4(450612u, 1065180u, 1073672u, 1082328u);
+        case 78u: return uvec4(1286672u, 1294964u, 1303152u, 1647228u);
+        case 79u: return uvec4(1655588u, 1663584u, 1475372u, 2040528u);
+        case 80u: return uvec4(1458892u, 1352392u, 1983124u, 1991628u);
+        case 81u: return uvec4(2057196u, 2065388u, 2073588u, 2155548u);
+        case 82u: return uvec4(2163740u, 2171940u, 1967040u, 1975232u);
+        case 83u: return uvec4(1393320u, 2081784u, 2089976u, 475368u);
+        case 84u: return uvec4(2081784u, 2139128u, 2147352u, 1508064u);
+        case 85u: return uvec4(1516256u, 2032608u, 1559289u, 1551097u);
+        case 86u: return uvec4(1543129u, 1534941u, 1526753u, 1518309u);
+        case 87u: return uvec4(1174077u, 109117u, 1886785u, 1690181u);
+        case 88u: return uvec4(1681993u, 1674033u, 1936305u, 1919921u);
+        case 89u: return uvec4(1911477u, 1903289u, 1894881u, 1887129u);
+        case 90u: return uvec4(1460937u, 1452745u, 986085u, 2149353u);
+        case 91u: return uvec4(2083821u, 2075637u, 2124813u, 2198541u);
+        case 92u: return uvec4(2189545u, 2156789u, 518393u, 1870077u);
+        case 93u: return uvec4(1715089u, 1706901u, 1698713u, 1690425u);
+        case 94u: return uvec4(2116617u, 2108425u, 2099421u, 2091241u);
+        case 95u: return uvec4(2083833u, 1583877u, 1575685u, 1567365u);
+        case 96u: return uvec4(2001557u, 1993677u, 1116705u, 1108513u);
+        case 97u: return uvec4(1099829u, 1092569u, 1083921u, 1969089u);
+        case 98u: return uvec4(1960897u, 1952425u, 1944245u, 1936305u);
+        case 99u: return uvec4(1649445u, 1641253u, 1632865u, 1624689u);
+        case 100u: return uvec4(1616661u, 1510113u, 1501921u, 1493985u);
+        case 101u: return uvec4(1485797u, 1477329u, 1993677u, 1985485u);
+        case 102u: return uvec4(1976981u, 1370777u, 1583773u, 1321733u);
+        case 103u: return uvec4(1280777u, 1608461u, 1747729u, 1739605u);
+        case 104u: return uvec4(1731397u, 1723209u, 1772385u, 1764193u);
+        case 105u: return uvec4(1755973u, 1747797u, 1796973u, 1788781u);
+        case 106u: return uvec4(1780549u, 1772385u, 1821561u, 1813369u);
+        case 107u: return uvec4(1805125u, 1796973u, 1846149u, 1837957u);
+        case 108u: return uvec4(1829701u, 1821561u, 1870737u, 1862545u);
+        case 109u: return uvec4(1854277u, 1846149u, 1395369u, 1387177u);
+        case 110u: return uvec4(1379269u, 1370781u, 2190381u, 2182189u);
+        case 111u: return uvec4(2173981u, 2165793u, 542985u, 534793u);
+        case 112u: return uvec4(527389u, 518397u, 567573u, 559381u);
+        case 113u: return uvec4(551965u, 542985u, 592161u, 583969u);
+        case 114u: return uvec4(576541u, 567573u, 616749u, 608557u);
+        case 115u: return uvec4(601117u, 592161u, 641337u, 633145u);
+        case 116u: return uvec4(625693u, 616749u, 665925u, 657733u);
+        case 117u: return uvec4(650269u, 641337u, 690513u, 682321u);
+        case 118u: return uvec4(674845u, 665925u, 715101u, 706909u);
+        case 119u: return uvec4(699421u, 690513u, 739689u, 731497u);
+        case 120u: return uvec4(723997u, 715101u, 764277u, 756085u);
+        case 121u: return uvec4(748573u, 739689u, 788865u, 780673u);
+        case 122u: return uvec4(773149u, 764277u, 813453u, 805261u);
+        case 123u: return uvec4(797725u, 788865u, 838041u, 829849u);
+        case 124u: return uvec4(822301u, 813453u, 862629u, 854437u);
+        case 125u: return uvec4(846877u, 838041u, 887217u, 879025u);
+        case 126u: return uvec4(871453u, 862629u, 911805u, 903613u);
+        case 127u: return uvec4(896029u, 887217u, 936393u, 928201u);
+        default: return uvec4(0u);
+    }
+}
+
+uvec4 logoStripBlockChunk2(uint blockIndex)
+{
+    switch (blockIndex) {
+        case 128u: return uvec4(920605u, 911805u, 960981u, 952789u);
+        case 129u: return uvec4(945181u, 936393u, 985569u, 977377u);
+        case 130u: return uvec4(969757u, 960981u, 1018353u, 1010161u);
+        case 131u: return uvec4(1001953u, 993765u, 1042941u, 1034749u);
+        case 132u: return uvec4(1026529u, 1018353u, 18441u, 10249u);
+        case 133u: return uvec4(2529u, 1042941u, 43029u, 34837u);
+        case 134u: return uvec4(27105u, 18441u, 67617u, 59425u);
+        case 135u: return uvec4(51681u, 43029u, 92205u, 84013u);
+        case 136u: return uvec4(76257u, 67617u, 141381u, 133189u);
+        case 137u: return uvec4(124981u, 116793u, 165969u, 157777u);
+        case 138u: return uvec4(149557u, 141381u, 190557u, 182365u);
+        case 139u: return uvec4(174133u, 165969u, 215145u, 206953u);
+        case 140u: return uvec4(198709u, 190557u, 239733u, 231541u);
+        case 141u: return uvec4(223285u, 215145u, 264321u, 256129u);
+        case 142u: return uvec4(247861u, 239733u, 288909u, 280717u);
+        case 143u: return uvec4(272437u, 264321u, 313497u, 305305u);
+        case 144u: return uvec4(297013u, 288909u, 338085u, 329893u);
+        case 145u: return uvec4(321589u, 313497u, 362673u, 354481u);
+        case 146u: return uvec4(346165u, 338085u, 387261u, 379069u);
+        case 147u: return uvec4(370741u, 362673u, 411849u, 403657u);
+        case 148u: return uvec4(395317u, 387261u, 436437u, 428245u);
+        case 149u: return uvec4(419893u, 411849u, 1067529u, 1059337u);
+        case 150u: return uvec4(1051609u, 1559289u, 1231449u, 1223257u);
+        case 151u: return uvec4(1215049u, 1206861u, 1239645u, 1198685u);
+        case 152u: return uvec4(1673825u, 1665837u, 1280625u, 1272433u);
+        case 153u: return uvec4(1264225u, 1256037u, 1313409u, 1305217u);
+        case 154u: return uvec4(1297009u, 1288821u, 1354389u, 1346197u);
+        case 155u: return uvec4(1337989u, 1329801u, 2141205u, 2133013u);
+        case 156u: return uvec4(2124793u, 477417u, 2116617u, 453641u);
+        case 157u: return uvec4(444469u, 436437u, 1141293u, 1133101u);
+        case 158u: return uvec4(1124405u, 1116705u, 1165881u, 1157689u);
+        case 159u: return uvec4(1148981u, 1141293u, 1887129u, 109465u);
+        case 160u: return uvec4(100833u, 92205u, 1452741u, 1444549u);
+        case 161u: return uvec4(1436129u, 1428153u, 1403565u, 1395373u);
+        case 162u: return uvec4(1419953u, 486069u, 477421u, 502001u);
+        case 163u: return uvec4(461045u, 452833u, 477413u, 1067241u);
+        case 164u: return uvec4(2017801u, 1083917u, 2116113u, 109577u);
+        case 165u: return uvec4(2018261u, 1649625u, 1248037u, 1665833u);
+        case 166u: return uvec4(1477421u, 1469137u, 1461221u, 1919689u);
+        case 167u: return uvec4(1936297u, 1928109u, 2059245u, 2075629u);
+        case 168u: return uvec4(2067441u, 1198665u, 1239625u, 1231449u);
+        case 169u: return uvec4(1280625u, 1321585u, 1313409u, 1969089u);
+        case 170u: return uvec4(1395649u, 1977285u, 2083833u, 2149369u);
+        case 171u: return uvec4(2141205u, 2149401u, 986137u, 2157597u);
+        case 172u: return uvec4(108597u, 1173557u, 1165881u, 1280625u);
+        case 173u: return uvec4(1616497u, 1608465u, 1510113u, 2034401u);
+        case 174u: return uvec4(1518309u, 4098u, 6146u, 14342u);
+        case 175u: return uvec4(22538u, 30734u, 38930u, 47126u);
+        case 176u: return uvec4(55322u, 63518u, 71714u, 79910u);
+        case 177u: return uvec4(88106u, 96302u, 104498u, 112694u);
+        case 178u: return uvec4(120890u, 129086u, 137282u, 145478u);
+        case 179u: return uvec4(153674u, 161870u, 170066u, 178262u);
+        case 180u: return uvec4(186458u, 194654u, 202850u, 211046u);
+        case 181u: return uvec4(219242u, 227438u, 235634u, 243830u);
+        case 182u: return uvec4(252026u, 260222u, 268418u, 276614u);
+        case 183u: return uvec4(284810u, 293006u, 301202u, 309398u);
+        case 184u: return uvec4(317594u, 325790u, 333986u, 342182u);
+        case 185u: return uvec4(350378u, 358574u, 366770u, 374966u);
+        case 186u: return uvec4(383162u, 391358u, 399554u, 407750u);
+        case 187u: return uvec4(415946u, 424142u, 432338u, 440534u);
+        case 188u: return uvec4(448730u, 456926u, 465122u, 473318u);
+        case 189u: return uvec4(481514u, 489710u, 497906u, 506102u);
+        case 190u: return uvec4(514298u, 522494u, 530690u, 538886u);
+        case 191u: return uvec4(547082u, 555278u, 563474u, 571670u);
+        default: return uvec4(0u);
+    }
+}
+
+uvec4 logoStripBlockChunk3(uint blockIndex)
+{
+    switch (blockIndex) {
+        case 192u: return uvec4(579866u, 588062u, 596258u, 604454u);
+        case 193u: return uvec4(612650u, 620846u, 629042u, 637238u);
+        case 194u: return uvec4(645434u, 653630u, 661826u, 670022u);
+        case 195u: return uvec4(678218u, 686414u, 694610u, 702806u);
+        case 196u: return uvec4(711002u, 719198u, 727394u, 735590u);
+        case 197u: return uvec4(743786u, 751982u, 760178u, 768374u);
+        case 198u: return uvec4(776570u, 784766u, 792962u, 801158u);
+        case 199u: return uvec4(809354u, 817550u, 825746u, 833942u);
+        case 200u: return uvec4(842138u, 850334u, 858530u, 866726u);
+        case 201u: return uvec4(874922u, 883118u, 891314u, 899510u);
+        case 202u: return uvec4(907706u, 915902u, 924098u, 932294u);
+        case 203u: return uvec4(940490u, 948686u, 956882u, 965078u);
+        case 204u: return uvec4(973274u, 981470u, 989666u, 997862u);
+        case 205u: return uvec4(1006058u, 1014254u, 1022450u, 1030646u);
+        case 206u: return uvec4(1038842u, 1047038u, 6146u, 1052675u);
+        case 207u: return uvec4(1055234u, 1063430u, 1071626u, 1079822u);
+        case 208u: return uvec4(1088018u, 1096214u, 1104410u, 1112606u);
+        case 209u: return uvec4(1120802u, 1128998u, 1137194u, 1145390u);
+        case 210u: return uvec4(1153586u, 1161782u, 1169978u, 1178174u);
+        case 211u: return uvec4(1186370u, 1194566u, 1202762u, 1210958u);
+        case 212u: return uvec4(1219154u, 1227350u, 1235546u, 1243742u);
+        case 213u: return uvec4(1251938u, 1260134u, 1268330u, 1276526u);
+        case 214u: return uvec4(1284722u, 1292918u, 1301114u, 1309310u);
+        case 215u: return uvec4(1317506u, 1325702u, 1333898u, 1342094u);
+        case 216u: return uvec4(1350290u, 1358486u, 1366682u, 1374878u);
+        case 217u: return uvec4(1383074u, 1391270u, 1399466u, 1407662u);
+        case 218u: return uvec4(1415858u, 1424054u, 1432250u, 1440446u);
+        case 219u: return uvec4(1448642u, 1456838u, 1465034u, 1473230u);
+        case 220u: return uvec4(1481426u, 1489622u, 1497818u, 1506014u);
+        case 221u: return uvec4(1514210u, 1522406u, 1530602u, 1538798u);
+        case 222u: return uvec4(1546994u, 1555190u, 1563386u, 1055234u);
+        case 223u: return uvec4(1569283u, 1571582u, 1579778u, 1587974u);
+        case 224u: return uvec4(1596170u, 1604366u, 1612562u, 1620758u);
+        case 225u: return uvec4(1628954u, 1637150u, 1645346u, 1653542u);
+        case 226u: return uvec4(1661738u, 1669934u, 1678130u, 1686326u);
+        case 227u: return uvec4(1694522u, 1702718u, 1710914u, 1719110u);
+        case 228u: return uvec4(1727306u, 1735502u, 1743698u, 1751894u);
+        case 229u: return uvec4(1760090u, 1768286u, 1776482u, 1784678u);
+        case 230u: return uvec4(1792874u, 1801070u, 1809266u, 1817462u);
+        case 231u: return uvec4(1825658u, 1833854u, 1842050u, 1850246u);
+        case 232u: return uvec4(1858442u, 1866638u, 1874834u, 1883030u);
+        case 233u: return uvec4(1891226u, 1899422u, 1907618u, 1915814u);
+        case 234u: return uvec4(1924010u, 1932206u, 1940402u, 1948598u);
+        case 235u: return uvec4(1956794u, 1964990u, 1973186u, 1981382u);
+        case 236u: return uvec4(1989578u, 1997774u, 2005970u, 1571582u);
+        case 237u: return uvec4(2011903u, 2014166u, 2022362u, 2030558u);
+        case 238u: return uvec4(2038754u, 2046950u, 2055146u, 2063342u);
+        case 239u: return uvec4(2071538u, 2079734u, 2087930u, 2096126u);
+        case 240u: return uvec4(2104322u, 2112518u, 2120714u, 2014166u);
+        case 241u: return uvec4(2126807u, 2128910u, 2137106u, 2145302u);
+        case 242u: return uvec4(2153498u, 2161694u, 2169890u, 2178086u);
+        case 243u: return uvec4(2186282u, 2194478u, 2202674u, 2128910u);
+        default: return uvec4(0u);
+    }
+}
+
+uvec4 logoStripBlock(uint blockIndex)
+{
+    if (blockIndex < 64u) return logoStripBlockChunk0(blockIndex);
+    else if (blockIndex < 128u) return logoStripBlockChunk1(blockIndex);
+    else if (blockIndex < 192u) return logoStripBlockChunk2(blockIndex);
+    else if (blockIndex < 244u) return logoStripBlockChunk3(blockIndex);
+    return uvec4(0u);
+}
+
+uint logoStripRecord(uint slot)
+{
+    uvec4 block = logoStripBlock(slot / 8u);
+    uint packed = block[(slot / 2u) % 4u];
+    return (packed >> ((slot % 2u) * 11u)) & 2047u;
+}
+
+void logoVertex(uint slot, out vec3 outPosition, out vec3 outNormal, out vec2 outUV)
+{
+    uint code = logoStripRecord(min(slot, LOGO_STRIP_COUNT - 1u));
+    uint pointIndex = code / 4u;
+    uint mode = code % 4u;
+    vec4 point = logoPoint(pointIndex);
+    vec2 xy = point.xy;
+    float radius2 = dot(xy, xy);
+    float frontZ = 0.045 + 0.12 * (1.0 - radius2);
+    float z = (mode == 0u || mode == 2u) ? frontZ : -0.045;
+    outPosition = LOGO_RADIUS * vec3(xy, z);
+    if (mode == 0u) {
+        outNormal = normalize(vec3(0.24 * xy, 1.0));
+    } else if (mode == 1u) {
+        outNormal = vec3(0.0, 0.0, -1.0);
+    } else {
+        outNormal = vec3(point.zw, 0.0);
+    }
+    outUV = xy * vec2(0.5, -0.5) + vec2(0.5);
+}
+
 
 mat3 rotY(float angle){
     float c = cos(angle), s = sin(angle);
@@ -67,26 +716,65 @@ mat3 rotZ(float angle){
 }
 
 void main(){
-    uint index = gl_GlobalInvocationID.y * ubo.numU + gl_GlobalInvocationID.x;
+    uvec2 gridId = gl_GlobalInvocationID.xy;
+    if (gridId.x >= ubo.numU || gridId.y >= ubo.numV ||
+        ubo.numU < 2u || ubo.numV < 2u) {
+        return;
+    }
+
+    uint index = gridId.y * ubo.numU + gridId.x;
     vec2 numUV = vec2(ubo.numU, ubo.numV);
     vec2 ij = vec2(float(index / ubo.numU), float(index % ubo.numU));
     const vec2 maxUV1 = 2.f * PI * vec2(ubo.p1, 1.f);
     vec2 uv1 = ij * maxUV1 / (numUV - vec2(1));
     const vec2 maxUV2 = 2.f * PI * vec2(ubo.p2, 1.f);
     vec2 uv2 = ij * maxUV2 / (numUV - vec2(1));
+    vec2 torusUV = ij / numUV;
 
-    mat3 modelMatrix = rotY(0.5f * ubo.time) * rotZ(0.5f * ubo.time);
-    VertexData v1 = torusKnot(uv1,vec2(ubo.p1, ubo.q1));
-    VertexData v2 = torusKnot(uv2,vec2(ubo.p2, ubo.q2));
+    VertexData v1;
+    VertexData v2;
+    vec2 finalUV = torusUV;
 
-    vec3 pos = mix(v1.position.xyz, v2.position.xyz, ubo.morph);
-    vec3 norm = mix(v1.normal.xyz, v2.normal.xyz, ubo.morph);
+    // (11, 11) selects the logo independently for each morph endpoint.
+    if (ubo.numU >= LOGO_MIN_U &&
+        ((ubo.p1 == 11u && ubo.q1 == 11u) ||
+         (ubo.p2 == 11u && ubo.q2 == 11u))) {
+        uint slot = 2u * gridId.x + (gridId.y == 0u ? 0u : 1u);
+        vec3 logoPosition;
+        vec3 logoNormal;
+        vec2 logoUV;
+        logoVertex(slot, logoPosition, logoNormal, logoUV);
+
+        VertexData logo;
+        logo.position = vec4(logoPosition, 1.0);
+        logo.normal = vec4(logoNormal, 0.0);
+        logo.color = vec4(1.0);
+        logo.uv = logoUV;
+        logo._padding = vec2(0.0);
+
+        if (ubo.p1 == 11u && ubo.q1 == 11u) {
+            v1 = logo;
+        } else {
+            v1 = torusKnot(uv1, vec2(ubo.p1, ubo.q1));
+            v1.uv = torusUV;
+        }
+        if (ubo.p2 == 11u && ubo.q2 == 11u) {
+            v2 = logo;
+        } else {
+            v2 = torusKnot(uv2, vec2(ubo.p2, ubo.q2));
+            v2.uv = torusUV;
+        }
+        finalUV = mix(v1.uv, v2.uv, ubo.morph);
+    } else {
+        v1 = torusKnot(uv1, vec2(ubo.p1, ubo.q1));
+        v2 = torusKnot(uv2, vec2(ubo.p2, ubo.q2));
+    }
 
     VertexData vtx;
-    vtx.position = vec4(pos, 1.f);
-    vtx.normal = vec4(norm, 0.f);
-    vtx.uv = (ij/numUV);
-    vtx.color = vec4(1.f);
+    vtx.position = vec4(mix(v1.position.xyz, v2.position.xyz, ubo.morph), 1.0);
+    vtx.normal = vec4(mix(v1.normal.xyz, v2.normal.xyz, ubo.morph), 0.0);
+    vtx.color = vec4(1.0);
+    vtx.uv = finalUV;
+    vtx._padding = vec2(0.0);
     vbo.vertices[index] = vtx;
-
 }

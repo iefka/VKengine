@@ -382,7 +382,7 @@ void Application::drawUI(){
 	std::string fps("FPS: " + std::to_string(fpsCounter.getFPS()));
 
 	ImGui::StyleColorsClassic();
-	ImGui::Text(fps.c_str());
+	ImGui::TextUnformatted(fps.c_str());
 	computeGeometry_->drawControlUI();
 
 	//end

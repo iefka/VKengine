@@ -54,8 +54,8 @@ namespace de {
 
 		Renderer(const Renderer&) = delete;
 		Renderer& operator=(const Renderer&) = delete;
-		Renderer(Renderer&&) = default;
-		Renderer& operator=(Renderer&&) = default;
+		Renderer(Renderer&&) = delete;
+		Renderer& operator=(Renderer&&) = delete;
 
 		std::optional<FrameData> beginFrame();
 

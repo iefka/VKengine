@@ -75,6 +75,17 @@ file(GLOB_RECURSE VULKAN_TUTORIAL_HEADERS CONFIGURE_DEPENDS
 
 add_executable(vulkan_tutorial ${VULKAN_TUTORIAL_SOURCES} ${VULKAN_TUTORIAL_HEADERS})
 
+option(VK_HARD_VALIDATION
+    "Enable synchronization and GPU-assisted validation in Debug"
+    OFF
+)
+
+if(VK_HARD_VALIDATION)
+    target_compile_definitions(vulkan_tutorial PRIVATE
+        DE_VK_HARD_VALIDATION=1
+    )
+endif()
+
 # ---- Автоматическая генерация фильтров Solution Explorer по реальной структуре папок ----
 # Без этого VS/CMake кладёт все .cpp в один плоский "Source Files" и не видит подпапки
 # (Systems/, Utility/). TREE-режим source_group строит дерево фильтров 1-в-1 с файловой системой.

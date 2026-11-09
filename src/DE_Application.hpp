@@ -60,8 +60,8 @@ private:
 };
 
 struct ApplicationConfig {
-	int windowWidth = 800;
-	int windowHeight = 600;
+	int windowWidth = 1200;
+	int windowHeight = 1000;
 	const char* windowTitle = "MyEngine";
 	uint32_t swapchainImageCount = 2;
 	uint32_t framesInFlight = 2;

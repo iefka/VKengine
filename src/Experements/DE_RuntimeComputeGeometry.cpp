@@ -180,7 +180,7 @@ namespace de{
     void RuntimeComputeGeometry::drawControlUI(){
 
         static const std::vector<std::pair<uint32_t, uint32_t>> PQ = {
-	        {2, 3}, {2, 5}, {2, 7}, {3, 4}, {2, 9}, {3, 5}, {5 ,8}
+	        {2, 3}, {2, 5}, {2, 7}, {3, 4}, {2, 9}, {3, 5}, {5 ,8}, {11, 11}
         };
 
         if (ImGui::CollapsingHeader("Thorus knot")) {

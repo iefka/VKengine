@@ -72,13 +72,25 @@ namespace de {
         if (builder.hasDepth_) subpass.setPDepthStencilAttachment(&depthRef);
 
         // Subpass dependency to wait for the swapchain to finish reading
-        const auto dependency = vk::SubpassDependency{}
+       const auto dependency = vk::SubpassDependency{}
             .setSrcSubpass(VK_SUBPASS_EXTERNAL)
             .setDstSubpass(0)
-            .setSrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
-            .setSrcAccessMask({})
-            .setDstStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
-            .setDstAccessMask(vk::AccessFlagBits::eColorAttachmentWrite);
+            .setSrcStageMask(
+                vk::PipelineStageFlagBits::eColorAttachmentOutput |
+                vk::PipelineStageFlagBits::eEarlyFragmentTests |
+                vk::PipelineStageFlagBits::eLateFragmentTests)
+            .setSrcAccessMask(
+                vk::AccessFlagBits::eColorAttachmentWrite |
+                vk::AccessFlagBits::eDepthStencilAttachmentWrite)
+            .setDstStageMask(
+                vk::PipelineStageFlagBits::eColorAttachmentOutput |
+                vk::PipelineStageFlagBits::eEarlyFragmentTests |
+                vk::PipelineStageFlagBits::eLateFragmentTests)
+            .setDstAccessMask(
+                vk::AccessFlagBits::eColorAttachmentRead |
+                vk::AccessFlagBits::eColorAttachmentWrite |
+                vk::AccessFlagBits::eDepthStencilAttachmentRead |
+                vk::AccessFlagBits::eDepthStencilAttachmentWrite);
 
         const auto renderPassInfo = vk::RenderPassCreateInfo{}
             .setAttachments(attachments)

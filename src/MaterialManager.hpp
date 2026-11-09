@@ -29,7 +29,7 @@ namespace de {
 		MaterialManager& operator=(const MaterialManager&) = delete;
 
 		MaterialManager(MaterialManager&&) = default;
-		MaterialManager& operator=(MaterialManager&&) = default;
+		MaterialManager& operator=(MaterialManager&&) = delete;
 
 		std::vector<std::shared_ptr<Material>> resolveMaterials(
 			const std::vector<MaterialRecord>& materials,

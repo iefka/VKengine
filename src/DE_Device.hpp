@@ -26,15 +26,15 @@ namespace de{
 	class Device{
 	public:
 
-		Device(Instance& instance,std::optional<vk::SurfaceKHR> surface = std::nullopt, const std::vector<const char*>& extensions = {},
-			const std::vector<const char*>& layers = {});
+		Device(Instance& instance,std::optional<vk::SurfaceKHR> surface = std::nullopt,
+			 const std::vector<const char*>& extensions = {});
 		~Device() = default;
 
 		Device(const Device&) = delete;
 		Device& operator=(const Device&) = delete;
 
 		Device(Device&&) = default;
-		Device& operator=(Device&&) = default;
+		Device& operator=(Device&&) = delete;
 
 		void copyBuffer(
 			const vk::Buffer& srcBuffer,
@@ -73,7 +73,6 @@ namespace de{
 
 		std::unique_ptr<CommandPool> transientCommandPool_;
 		const std::vector<const char*> extensions_;
-		const std::vector<const char*> layers_;
 
 		//return discrete gpu from vector of all user gpus
 		vk::PhysicalDevice pickDiscreteGpu(const std::vector<vk::PhysicalDevice>& devices);

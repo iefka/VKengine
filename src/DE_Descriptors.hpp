@@ -74,7 +74,7 @@ namespace de{
 		DescriptorPool(const DescriptorPool&) = delete;
 		DescriptorPool& operator=(const DescriptorPool&) = delete;
 		DescriptorPool(DescriptorPool&&) = default;
-		DescriptorPool& operator=(DescriptorPool&&) = default;
+		DescriptorPool& operator=(DescriptorPool&&) = delete;
 
 		vk::DescriptorSet allocate(const DescriptorSetLayout& descriptorSetLayout) const;
 

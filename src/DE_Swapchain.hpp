@@ -106,7 +106,7 @@ namespace de {
 		Swapchain& operator=(const Swapchain&) = delete;
 
 		Swapchain(Swapchain&&) = default;
-		Swapchain& operator=(Swapchain&&) = default;
+		Swapchain& operator=(Swapchain&&) = delete;
 
 		uint32_t getImageCount() const noexcept { return static_cast<uint32_t>(imageViews_.size()); }
 		vk::SwapchainKHR getHandle() const noexcept { return *swapchain_; }

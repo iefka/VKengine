@@ -50,7 +50,7 @@ namespace de {
 
 		// Allow move semantics
 		RenderPass(RenderPass&&) = default;
-		RenderPass& operator=(RenderPass&&) = default;
+		RenderPass& operator=(RenderPass&&) = delete;
 
 		// Access underlying Vulkan render pass
 		const vk::UniqueRenderPass& getRenderPass() const noexcept { return renderPass_; }

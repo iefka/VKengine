@@ -2,7 +2,6 @@
 #define _DE_WINDOW_
 
 //glfw
-#define GLFW_NO_API
 #define GLFW_INCLUDE_VULKAN
 #include<GLFW/glfw3.h>
 //memory

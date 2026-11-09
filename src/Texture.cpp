@@ -23,6 +23,7 @@ namespace de {
 		void generateMipmaps(const Device& device, vk::Image image,
 			vk::Format format, int texWidth, int texHeight, uint32_t mipLevels) {
 
+				
 			if (mipLevels == 0) {
 				return;
 			}

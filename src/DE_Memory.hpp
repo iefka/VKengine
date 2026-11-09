@@ -30,9 +30,9 @@ namespace de{
 
 	struct MemoryUsageInfo{
 
-		MemoryUsageInfo(vk::DeviceSize size_ = {0},
+		MemoryUsageInfo(vk::DeviceSize size_ = 0,
 			uint32_t instanceCount_ = 1,
-			vk::DeviceSize offset_ = {0},
+			vk::DeviceSize offset_ = 0,
 			vk::BufferUsageFlags bufferUsage_ = {},
 			vk::MemoryPropertyFlags memoryFlags_ = {vk::MemoryPropertyFlagBits::eHostVisible
 			| vk::MemoryPropertyFlagBits::eHostCoherent})
@@ -59,8 +59,8 @@ namespace de{
 		Buffer(const Buffer&) = delete;
 		Buffer& operator=(const Buffer&) = delete;
 
-		Buffer(Buffer&&) = default;
-		Buffer& operator=(Buffer&&) = default;
+		Buffer(Buffer&&) = delete;
+		Buffer& operator=(Buffer&&) = delete;
 
 		const vk::UniqueBuffer& getBuffer() const noexcept{
 			return gpuBuffer_.buffer;
@@ -106,8 +106,8 @@ namespace de{
 		Image(const Image&) = delete;
 		Image& operator=(const Image&) = delete;
 
-		Image(Image&&) = default;
-		Image& operator=(Image&&) = default;
+		Image(Image&&) = delete;
+		Image& operator=(Image&&) = delete;
 
 		const vk::Image getImage() const noexcept {
 			return *gpuImage_.image;

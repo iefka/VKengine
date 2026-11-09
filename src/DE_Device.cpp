@@ -8,8 +8,9 @@
 
 namespace de{
 
-	Device::Device(Instance& instance, std::optional<vk::SurfaceKHR> surface, const std::vector<const char*>& extensions,
-		const std::vector<const char*>& layers) :instance_{instance}, extensions_{extensions}, layers_{layers} {
+	Device::Device(Instance& instance, std::optional<vk::SurfaceKHR> surface, const std::vector<const char*>& extensions) 
+	 :instance_{instance},
+	 extensions_{extensions} {
 		vk::Instance aInstance = instance_.getInstance();
 
 		//create physical device
@@ -192,11 +193,6 @@ namespace de{
 			familyIndexCount[qf.queuFamilyIndex]++;
 		}
 
-		vk::PhysicalDeviceFeatures deviceFeatures{};
-		physicalDevice_.getFeatures(&deviceFeatures);
-
-		deviceFeatures;
-
 		std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos{};
 
 		std::vector<std::vector<float>> prioritiesStorage;
@@ -261,8 +257,7 @@ namespace de{
 		const auto deviceCreateInfo = vk::DeviceCreateInfo{}
 			.setPNext(&featuresChainEnable.get<vk::PhysicalDeviceFeatures2>())
 			.setQueueCreateInfos(queueCreateInfos)
-			.setPEnabledExtensionNames(extensions_)
-			.setPEnabledLayerNames(layers_);
+			.setPEnabledExtensionNames(extensions_);
 
 
 		return physicalDevice_.createDeviceUnique(deviceCreateInfo);

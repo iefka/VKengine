@@ -78,8 +78,8 @@ namespace de {
 
 		Mesh(const Mesh&) = delete;
 		Mesh& operator=(const Mesh&) = delete;
-		Mesh(Mesh&&) = default;
-		Mesh& operator=(Mesh&&) = default;
+		Mesh(Mesh&&) = delete;
+		Mesh& operator=(Mesh&&) = delete;
 
 	private:
 		explicit Mesh(const Device& device) : device_(device){}

@@ -114,7 +114,7 @@ namespace de {
 
 		const auto& logicalDevice = device_.getLogicalDevice();
 
-		logicalDevice.waitForFences(
+		auto result = logicalDevice.waitForFences(
 			*inFlightFences_[currentFrameIndex_], true, std::numeric_limits<uint64_t>::max()
 		);
 
@@ -133,7 +133,7 @@ namespace de {
 		}
 
 		if (imagesInFlightFences_[imageIndex]) {
-			logicalDevice.waitForFences(
+			result = logicalDevice.waitForFences(
 				imagesInFlightFences_[imageIndex], true,
 				std::numeric_limits<uint64_t>::max()
 			);

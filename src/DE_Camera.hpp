@@ -8,9 +8,9 @@ namespace de{
 	class Camera {
 	public:
 		Camera(glm::vec3 position = { 0.0f, 0.0f, -3.0f },
-			float fov = { 30.0f },
-			float nearPlane = { 0.1f },
-			float farPlane = { 50.0f }) 
+			float fov =  30.0f,
+			float nearPlane =  0.1f,
+			float farPlane =  50.0f) 
 			:position_{position},
 			fov_{fov},
 			nearPlane_{ nearPlane },
