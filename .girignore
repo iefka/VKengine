@@ -1,8 +1,0 @@
-# .gitignore
-build/
-out/
-Shaders/bin
-.vs/
-*.spv
-CMakeUserPresets.json
-*.user

@@ -1,0 +1,13 @@
+# .gitignore
+build/
+out/
+Shaders/bin
+.vs/
+*.spv
+CMakeUserPresets.json
+*.user
+*.matCache
+*.mesh
+build-vscode-clang64/
+build-vscode-release/
+.vscode
