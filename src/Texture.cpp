@@ -31,7 +31,7 @@ namespace de {
 			if (mipLevels > 1) {
 				const auto formatProperties = device.getPhysicalDevice().getFormatProperties(format);
 				if (!(formatProperties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eSampledImageFilterLinear)) {
-					std::runtime_error("generateMipmaps: format dosent support linear blit filtering");
+					throw std::runtime_error("generateMipmaps: format doesn`t support linear blit filtering");
 				}
 			}
 
