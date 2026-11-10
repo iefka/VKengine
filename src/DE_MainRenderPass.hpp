@@ -16,7 +16,7 @@ namespace de {
 	class ControlledCamera;
 	class Device;
 	class DescriptorSetLayout;
-	class GlobalUBO;
+	struct GlobalUBO;
 
 	class MainRenderPass : public IRenderPass{
 	public:
@@ -40,10 +40,10 @@ namespace de {
 
 	private:
 
+		Renderer& renderer_;
 		SkyBoxSystem& skyboxSystem_;
 		RenderSystem& renderSystem_;
 		PointLightSystem& pointLightSystem_;
-		Renderer& renderer_;
 		ControlledCamera& camera_;
 		GameObject::Map& gameObjects_;
 

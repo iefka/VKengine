@@ -111,7 +111,7 @@ namespace de {
 
 	}
 
-	void GUIRenderPass::onSwapchainRecreation(const Swapchain& sc){
+	void GUIRenderPass::onSwapchainRecreation(const Swapchain&){
 		renderTarget_.rebind(renderer_.getSwapchain(), *this);
 	}
 

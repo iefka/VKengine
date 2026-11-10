@@ -35,6 +35,6 @@ namespace de{
 		return  vk::PipelineShaderStageCreateInfo{}
 			.setModule(*shaderModule_)
 			.setStage(states)
-			.setPName("main");
+			.setPName(entryName);
 	}
 }

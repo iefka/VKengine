@@ -22,6 +22,7 @@
 
 #include <array>
 #include <stdexcept>
+#include <cstdint>
 
 
 // ============================================================================
@@ -307,7 +308,7 @@ void Application::initGameObjects() {
 	  {1.f, 1.f, 1.f}  //
 	};
 
-	for (int i = 0; i < lightColors.size(); i++) {
+	for (size_t i = 0; i < lightColors.size(); i++) {
 		auto pointLight = de::GameObject::makePointLight(1.f,0.1f);
 		pointLight.color = lightColors[i];
 		auto rotateLight = glm::rotate(
@@ -474,7 +475,7 @@ void Application::updateScene(float deltaTime, float totalTime) {
 
 	computeGeometry_->updateTime(deltaTime);
 	computeTexture_->updateTime(totalTime);
-	controlledCamera_->updateCamera(deltaTime);
+	controlledCamera_->updateCamera();
 	mainPass_->updateTime(deltaTime, totalTime);
 
 }

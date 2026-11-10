@@ -8,7 +8,9 @@ namespace de {
 
 
 	Window::Window(uint16_t width, uint16_t height, const char* windowTitle)
-	:glfwWindow_{ initAndCreateWindow(width,height,windowTitle)}, width_{width}, height_{height} {
+		:width_{width}
+		,height_{height}
+		,glfwWindow_{ initAndCreateWindow(width,height,windowTitle)} {
 		glfwSetWindowUserPointer(glfwWindow_.get(), this);
 		glfwSetFramebufferSizeCallback(glfwWindow_.get(), frameBufferResizeCallback);
 		glfwSetInputMode(glfwWindow_.get(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);

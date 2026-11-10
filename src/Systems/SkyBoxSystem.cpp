@@ -16,8 +16,8 @@ namespace de {
 		std::vector<vk::DescriptorSetLayout> descriptorSetLayouts,
 		const DescriptorPool& descriptorPool,
 		std::string texturePath)
-		:renderPass_{renderPass},
-		device_{device},
+		:device_{device},
+		renderPass_{renderPass},
 		extent_{ extent } {
 	
 		sbTexture_ = std::make_unique<Texture>(Texture::loadCubemap(device_,

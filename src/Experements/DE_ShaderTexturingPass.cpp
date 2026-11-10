@@ -62,7 +62,7 @@ namespace de {
             slots_[i].image = std::make_unique<Image>(device_, imageInfo);
 
             device_.transitionImageLayout(slots_[i].image->getImage(),
-                kImageFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
+             vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
 
             slots_[i].view = utl::createImageView(device_.getLogicalDevice(), slots_[i].image->getImage(),
                 kImageFormat, vk::ImageAspectFlagBits::eColor);

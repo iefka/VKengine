@@ -45,7 +45,7 @@ namespace de{
 		void copyBufferToImage(vk::Buffer buffer, vk::Image image,
 			vk::ArrayProxy<const vk::BufferImageCopy> regions) const;
 
-		void transitionImageLayout(vk::Image image, vk::Format format,
+		void transitionImageLayout(vk::Image image,
 			vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
 			uint32_t layerCount = 1, uint32_t mipLevelCount = 0) const;
 

@@ -19,9 +19,6 @@ namespace de {
 
         const auto& geometry = baked->geometry;
 
-        std::size_t zeroOrTiny = 0;
-        std::size_t nonFinite = 0;
-
         auto vertices = std::views::zip(
             geometry.positions, geometry.normals, geometry.colors, geometry.UVs)
             | std::views::transform([](const auto& components) {

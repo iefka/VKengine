@@ -23,7 +23,7 @@ namespace de {
 		createPipeline(extent, descriptorSetLayouts);
 	}
 
-	void PointLightSystem::update(GameObject::Map& gameObjects, GlobalUBO& ubo, float deltaTime,float totalTime){
+	void PointLightSystem::update(GameObject::Map& gameObjects, GlobalUBO& ubo, float deltaTime, float){
 		int lightIndex{ 0 };
 
 		auto rotateLight = glm::rotate(glm::mat4(1.f), 0.5f * deltaTime, { 0.f, 1.f, 0.f });

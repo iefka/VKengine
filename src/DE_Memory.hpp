@@ -37,15 +37,15 @@ namespace de{
 			vk::MemoryPropertyFlags memoryFlags_ = {vk::MemoryPropertyFlagBits::eHostVisible
 			| vk::MemoryPropertyFlagBits::eHostCoherent})
 				:size{size_},
+				offset{offset_},
 				instanceCount{instanceCount_},
 				bufferUsage{bufferUsage_},
-				memoryFlags{memoryFlags_},
-				offset{offset_} {}
+				memoryFlags{memoryFlags_}{}
 
-		vk::DeviceSize			size		  = 0;
+		vk::DeviceSize			size = 0;
+		vk::DeviceSize			offset = 0;
 		uint32_t				instanceCount = 1;
 		vk::BufferUsageFlags	bufferUsage = {};
-		vk::DeviceSize			offset = 0;
 		vk::MemoryPropertyFlags memoryFlags{
 										vk::MemoryPropertyFlagBits::eHostVisible
 										| vk::MemoryPropertyFlagBits::eHostCoherent };

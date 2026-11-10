@@ -9,7 +9,7 @@ namespace de{
 		mouseControl_.rotate(cameraGameObject_, window_.getGlfwWindow());
 		keyboardControl_.moveInPlaneXZ(window_.getGlfwWindow(), deltaTime, cameraGameObject_);
 	}
-	void ControlledCamera::updateCamera(float deltaTime) {
+	void ControlledCamera::updateCamera() {
 		camera_.setView(
 			cameraGameObject_.transform.translation,
 			cameraGameObject_.transform.rotation);

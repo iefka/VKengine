@@ -17,14 +17,14 @@ namespace de {
 		}
 
 		void handleInputs(float deltaTime, int glfwKeyMouseLock);
-		void updateCamera(float deltaTime);
+		void updateCamera();
 
 		const Camera& getCamera()noexcept { return camera_; }
 
 	private:
+		Window& window_;
 		Camera camera_{};
 		GameObject cameraGameObject_;
-		Window& window_;
 		KeyboardMovementController keyboardControl_;
 		MouseLookController mouseControl_;
 

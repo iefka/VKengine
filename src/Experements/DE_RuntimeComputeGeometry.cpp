@@ -92,7 +92,7 @@ namespace de{
     }
 
     void RuntimeComputeGeometry::dispatch(vk::CommandBuffer commandBuffer,
-        uint32_t frameIndex){
+        uint32_t){
 
         const auto& pipeline = *computePipeline_->getPipeline();
         const auto& layout = *computePipeline_->getLayout();

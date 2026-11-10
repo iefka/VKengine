@@ -187,11 +187,14 @@ namespace de {
 			// Формируем флаги использования: всегда нужен DepthStencilAttachment
 			vk::ImageUsageFlags usage = vk::ImageUsageFlagBits::eDepthStencilAttachment | additionalUsages;
 			auto images = createImages(
-				device,
-				1,
+				device, 1,
 				depthFormat,
 				usage,
-				extent);
+				extent,
+				vk::MemoryPropertyFlagBits::eDeviceLocal,
+				vk::ImageType::e2D, 1u,
+				arrayLayers,
+				samples);
 			return std::move(images[0]);
 	}
 	

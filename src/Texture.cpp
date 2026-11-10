@@ -224,7 +224,7 @@ namespace de {
 
 		textureImage_ = std::make_unique<Image>(device, imageUsage);
 
-		device.transitionImageLayout(textureImage_->getImage(), textureFormat,
+		device.transitionImageLayout(textureImage_->getImage(),
 			vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
 
 
@@ -298,7 +298,7 @@ namespace de {
 
 		textureImage_ = std::make_unique<Image>(device, imageUsage);
 
-		device.transitionImageLayout(textureImage_->getImage(), textureFormat,
+		device.transitionImageLayout(textureImage_->getImage(),
 			vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
 
 		auto region = vk::BufferImageCopy{}
@@ -310,7 +310,7 @@ namespace de {
 			region
 		);
 
-		device.transitionImageLayout(textureImage_->getImage(), textureFormat,
+		device.transitionImageLayout(textureImage_->getImage(),
 			vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
 
 		textureImageView_ = utl::createImageView(device.getLogicalDevice(), textureImage_->getImage(),
@@ -446,7 +446,7 @@ namespace de {
 
 		textureImage_ = std::make_unique<Image>(device, imageUsage);
 
-		device.transitionImageLayout(textureImage_->getImage(), imgFormat,
+		device.transitionImageLayout(textureImage_->getImage(),
 			vk::ImageLayout::eUndefined,
 			vk::ImageLayout::eTransferDstOptimal, faceCount);
 
@@ -456,7 +456,7 @@ namespace de {
 			.setImageExtent({ faceWidht,faceHeight,1 });
 		device.copyBufferToImage(*stagingBuffer.getBuffer(), textureImage_->getImage(), region);
 
-		device.transitionImageLayout(textureImage_->getImage(), imgFormat,
+		device.transitionImageLayout(textureImage_->getImage(),
 			vk::ImageLayout::eTransferDstOptimal,
 			vk::ImageLayout::eShaderReadOnlyOptimal, faceCount);
 

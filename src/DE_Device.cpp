@@ -67,7 +67,7 @@ namespace de{
 		endSingleCommand(commandBuffer);
 	}
 
-	void Device::transitionImageLayout(vk::Image image, vk::Format format,
+	void Device::transitionImageLayout(vk::Image image,
 		vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
 		uint32_t layerCount,uint32_t mipLevelCount) const {
 	

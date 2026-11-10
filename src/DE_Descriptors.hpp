@@ -91,7 +91,7 @@ namespace de{
 	class DescriptorWriter {
 	public:
 		DescriptorWriter(const Device& device,const DescriptorPool& descriptorPool, const DescriptorSetLayout& descriptorLayout)
-			:pool_(descriptorPool), layout_(descriptorLayout), device_(device) {}
+			:device_(device), pool_(descriptorPool), layout_(descriptorLayout) {}
 		
 		DescriptorWriter& writeBuffer(uint32_t binding, vk::DescriptorBufferInfo* bufferInfo);
 		DescriptorWriter& writeImage(uint32_t binding, vk::DescriptorImageInfo* imageInfo);

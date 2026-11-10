@@ -10,8 +10,8 @@ namespace de {
 		Window& window, const CommandPool& commandPool,
 		uint32_t minImageCount, uint32_t framesInFlight) 
 		:device_{ device },
-		commandPool_{ commandPool },
 		window_{ window },
+		commandPool_{ commandPool },
 		minImageCount_{ minImageCount }, 
 		framesInFlight_{framesInFlight} {
 
@@ -114,7 +114,7 @@ namespace de {
 
 		const auto& logicalDevice = device_.getLogicalDevice();
 
-		auto result = logicalDevice.waitForFences(
+		[[maybe_unused]] auto result = logicalDevice.waitForFences(
 			*inFlightFences_[currentFrameIndex_], true, std::numeric_limits<uint64_t>::max()
 		);
 

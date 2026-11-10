@@ -55,7 +55,7 @@ namespace de{
 		return de::Pipeline<ComputeTag>::Traits::Builder{};
 	}
 	inline auto GraphicsBuilder() {
-		return  std::move(de::Pipeline<GraphicsTag>::Traits::Builder{});
+		return  de::Pipeline<GraphicsTag>::Traits::Builder{};
 	}
 
 	using ComputePipeline = Pipeline<ComputeTag>;

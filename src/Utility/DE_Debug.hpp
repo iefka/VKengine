@@ -11,7 +11,7 @@
 namespace de::debug{
 
 
-    static VKAPI_ATTR vk::Bool32 VKAPI_CALL MyDebugCallback(
+    [[maybe_unused]] static VKAPI_ATTR vk::Bool32 VKAPI_CALL MyDebugCallback(
         vk::DebugUtilsMessageSeverityFlagBitsEXT           messageSeverity,
         vk::DebugUtilsMessageTypeFlagsEXT                  messageTypes,
         const vk::DebugUtilsMessengerCallbackDataEXT*      pCallbackData,
