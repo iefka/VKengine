@@ -1,0 +1,30 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "clang-debug",
+      "displayName": "Clang64 Debug  ->  build-vscode-clang64",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-vscode-clang64",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "clang-release",
+      "displayName": "Clang64 Release  ->  build-vscode-release",
+      "inherits": "clang-debug",
+      "binaryDir": "${sourceDir}/build-vscode-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "clang-debug",   "configurePreset": "clang-debug",   "targets": ["vulkan_tutorial"] },
+    { "name": "clang-release", "configurePreset": "clang-release", "targets": ["vulkan_tutorial"] }
+  ]
+}
