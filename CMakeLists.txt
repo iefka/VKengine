@@ -75,6 +75,14 @@ file(GLOB_RECURSE VULKAN_TUTORIAL_HEADERS CONFIGURE_DEPENDS
 
 add_executable(vulkan_tutorial ${VULKAN_TUTORIAL_SOURCES} ${VULKAN_TUTORIAL_HEADERS})
 
+option(VKENGINE_TIME_TRACE "Emit clang -ftime-trace JSON" OFF)
+
+if(VKENGINE_TIME_TRACE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(vulkan_tutorial PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:-ftime-trace>
+        $<$<COMPILE_LANGUAGE:CXX>:-ftime-trace-granularity=500>)
+endif()
+
 option(VK_HARD_VALIDATION
     "Enable synchronization and GPU-assisted validation in Debug"
     OFF

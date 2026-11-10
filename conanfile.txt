@@ -1,6 +1,0 @@
-[requires]
-glfw/3.4
-
-[generators]
-CMakeToolchain
-CMakeDeps
