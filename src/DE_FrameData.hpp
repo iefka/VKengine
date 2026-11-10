@@ -1,15 +1,19 @@
 #include<vulkan/vulkan.hpp>
+
+#include <cstddef>
+
 #include"DE_GameObject.hpp"
 #include "DE_Camera.hpp"
+
 namespace de {
 	
-	#define MAX_LIGHTS 10
+	inline constexpr int kMaxLights = 10;
 
 	struct pointLight {
 		glm::vec4 lightPosition{ 1.f }; //ignore w 
 		glm::vec4 lightColor{ 1.f,1.f,1.f,0.2f };//w intensity
 		float radius{ 0.05f };
-		float _padding[3]{};
+		float _padding[3];
 	};
 
 	struct GlobalUBO {
@@ -18,8 +22,9 @@ namespace de {
 		glm::mat4 inverceViewMatrix{ 1.f };
 		glm::mat4 invViewProjMatrix{ 1.f };
 		glm::vec4 ambientLightColor{ 1.f,1.f,1.f, .02f };
-		pointLight pointLights[MAX_LIGHTS];
+		pointLight pointLights[kMaxLights];
 		int numLights;
+		float _padding[3];
 	};
 
 	struct FrameInfo
@@ -30,4 +35,10 @@ namespace de {
 		const de::Camera& camera;
 		const GameObject::Map& gameObjects;
 	};
+
+
+	static_assert(sizeof(de::pointLight) == 48);
+	static_assert(offsetof(de::GlobalUBO, pointLights) == 272);
+	static_assert(offsetof(de::GlobalUBO, numLights) == 752);
+	static_assert(sizeof(de::GlobalUBO) == 768);
 }
