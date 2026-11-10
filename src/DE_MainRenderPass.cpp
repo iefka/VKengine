@@ -74,7 +74,7 @@ namespace de{
 
 	void MainRenderPass::updateTime(float deltaTime, float totalTime){
 		deltaTime_ = deltaTime;
-		totalTime = totalTime;
+		totalTime_ = totalTime;
 	}
 
 	void MainRenderPass::record(const FrameData& frameData) {
