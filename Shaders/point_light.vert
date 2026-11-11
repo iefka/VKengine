@@ -7,7 +7,6 @@ struct PointLight {
 		vec4 lightPosition; //ignore w 
 		vec4 lightColor;
 		float radius;
-    float _padding[3];
 	};
 
 layout(std140, set = 0, binding = 0) uniform GlobalUbo{
@@ -18,7 +17,6 @@ layout(std140, set = 0, binding = 0) uniform GlobalUbo{
     vec4 ambientLightColor;
     PointLight lights[10];
     int numLights;
-    float _padding[3];
 } ubo;
 
 const vec2 OFFSETS[6] = vec2[](

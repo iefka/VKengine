@@ -70,19 +70,31 @@ namespace de {
 
 
 		ImGui_ImplVulkan_InitInfo initInfo{
-		 .ApiVersion = vk::makeApiVersion(0,1,4,0),
-		 .Instance = instance.getInstance(),
-		 .PhysicalDevice = device.getPhysicalDevice(),
-		 .Device = device.getLogicalDevice(),
-		 .QueueFamily = device.getGraphicsQueue().queuFamilyIndex,
-		 .Queue = device.getGraphicsQueue().queue,
-		 .DescriptorPool = imguiPool_->getPool(),
-		 .MinImageCount = renderer_.getSwapchain().getMinImageCount(),
-		 .ImageCount = renderer_.getSwapchain().getImageCount(),
-		 .UseDynamicRendering = false
+			.ApiVersion = vk::makeApiVersion(0,1,4,0),
+			.Instance = instance.getInstance(),
+			.PhysicalDevice = device.getPhysicalDevice(),
+			.Device = device.getLogicalDevice(),
+			.QueueFamily = device.getGraphicsQueue().queuFamilyIndex,
+			.Queue = device.getGraphicsQueue().queue,
+			.DescriptorPool = imguiPool_->getPool(),
+			.DescriptorPoolSize = 0,               
+			.MinImageCount = renderer_.getSwapchain().getMinImageCount(),
+			.ImageCount = renderer_.getSwapchain().getImageCount(),
+			.PipelineCache = nullptr,
+			.PipelineInfoMain = {
+				.RenderPass = *renderPass_->getRenderPass(),
+				.Subpass = 0,
+				.MSAASamples = VK_SAMPLE_COUNT_1_BIT,
+				.ExtraDynamicStates = {},
+				.PipelineRenderingCreateInfo = {}
+			},
+			.UseDynamicRendering = false,
+			.Allocator = nullptr,
+			.CheckVkResultFn = nullptr,
+			.MinAllocationSize = 0,
+			.CustomShaderVertCreateInfo = {},
+			.CustomShaderFragCreateInfo = {},
 		};
-		initInfo.PipelineInfoMain.RenderPass = *renderPass_->getRenderPass();
-		initInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 		
 
 		ImGui_ImplGlfw_InitForVulkan(window.getGlfwWindow(), true);

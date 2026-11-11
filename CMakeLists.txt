@@ -1,116 +1,136 @@
-cmake_minimum_required(VERSION 3.20)
-cmake_policy(SET CMP0091 NEW)
+cmake_minimum_required(VERSION 3.25)
+cmake_policy(SET CMP0091 NEW)   # select the MSVC runtime through CMake properties
 
-project("vulkan-cpp-tutorial")
+project(vulkan-cpp-tutorial LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(DE_PACKAGE_RELEASE "Enable Windows Release packaging" OFF)
+# ---------------------------------------------------------------------------
+# Options
+# ---------------------------------------------------------------------------
+option(DE_PACKAGE_RELEASE  "Assemble a self-contained Windows runtime package" OFF)
+option(DE_WARNINGS         "Enable -Wall -Wextra for project sources only"     ON)
+option(VK_HARD_VALIDATION  "Enable sync and GPU-assisted validation"           OFF)
+option(VKENGINE_TIME_TRACE "Emit clang -ftime-trace JSON next to objects"      OFF)
 
-find_program(GLSLC_EXECUTABLE glslc)
-
-# ---- Внешние зависимости через FetchContent — без conan ----
+# ---------------------------------------------------------------------------
+# Third-party dependencies (FetchContent, no conan)
+# SYSTEM keeps their headers out of our warning stream.
+# ---------------------------------------------------------------------------
 include(FetchContent)
 
 FetchContent_Declare(
     glm
     GIT_REPOSITORY https://github.com/g-truc/glm.git
-    GIT_TAG        8d1fd52e5ab5590e2c81768ace50c72bae28f2ed # 1.0.3
+    GIT_TAG        8d1fd52e5ab5590e2c81768ace50c72bae28f2ed  # 1.0.3
+    SYSTEM
 )
 
 FetchContent_Declare(
     glfw
     GIT_REPOSITORY https://github.com/glfw/glfw.git
-    GIT_TAG        7b6aead9fb88b3623e3b3725ebb42670cbe4c579 # 3.4
+    GIT_TAG        7b6aead9fb88b3623e3b3725ebb42670cbe4c579  # 3.4
+    SYSTEM
 )
-# GLFW не должен собирать свои примеры/тесты/докладчики — нам нужна только сама библиотека
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 
-# tinyobjloader — header-only библиотека для загрузки .obj моделей (DE_Model.cpp)
+# GLFW: the library only, no examples, tests, docs or install rules.
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_DOCS     OFF CACHE BOOL "" FORCE)
+set(GLFW_INSTALL        OFF CACHE BOOL "" FORCE)
+
 FetchContent_Declare(
     tinyobjloader
     GIT_REPOSITORY https://github.com/tinyobjloader/tinyobjloader.git
-    GIT_TAG          45636bdcef1a4fec140346b90c0b50bf0bc3e23b #2026-06-19
+    GIT_TAG        45636bdcef1a4fec140346b90c0b50bf0bc3e23b  # 2026-06-19
+    SYSTEM
 )
 
 FetchContent_MakeAvailable(glm glfw tinyobjloader)
 
-if(NOT DEFINED VULKAN_SDK_ROOT)
-    find_package(Vulkan REQUIRED)
-    if(Vulkan_FOUND)
-        if(NOT "${Vulkan_INCLUDE_DIRS}" STREQUAL "")
-            set(VULKAN_SDK_ROOT ${Vulkan_INCLUDE_DIRS})
-            string(REGEX REPLACE "/Include" "" VULKAN_SDK_ROOT ${VULKAN_SDK_ROOT})
-        endif()
-        message(STATUS "Found Vulkan SDK at ${VULKAN_SDK_ROOT}")
-    else()
-        message(FATAL_ERROR "Vulkan SDK not found. Set VULKAN_SDK_ROOT.")
-    endif()
-else()
-    if(WIN32)
-        set(Vulkan_INCLUDE_DIRS "${VULKAN_SDK_ROOT}/Include")
-        set(Vulkan_LIBRARIES    "${VULKAN_SDK_ROOT}/lib/vulkan-1.lib")
-    else()
-        set(Vulkan_INCLUDE_DIRS "${VULKAN_SDK_ROOT}/include")
-        set(Vulkan_LIBRARIES    "${VULKAN_SDK_ROOT}/lib/libvulkan.dylib")
-    endif()
-endif()
+# ---------------------------------------------------------------------------
+# Vulkan SDK and shader compiler
+# ---------------------------------------------------------------------------
+find_package(Vulkan REQUIRED)   # honours the VULKAN_SDK environment variable
 
-# ---- Автопоиск всех .cpp и .hpp файлов в src (включая подпапки Systems/, Utility/) ----
-# Заголовки тоже добавляются в таргет (хоть и не компилируются отдельно) —
-# иначе Visual Studio их вообще не увидит в Solution Explorer и не сможет
-# построить для них фильтры.
-file(GLOB_RECURSE VULKAN_TUTORIAL_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/src/*.cpp"
-)
-file(GLOB_RECURSE VULKAN_TUTORIAL_HEADERS CONFIGURE_DEPENDS
+find_program(GLSLC_EXECUTABLE glslc
+    HINTS "$ENV{VULKAN_SDK}/Bin" "$ENV{VULKAN_SDK}/bin")
+
+# ---------------------------------------------------------------------------
+# Sources
+# Every .cpp/.hpp under src/ is picked up automatically; third-party code is
+# collected separately so it never receives our warning flags.
+# ---------------------------------------------------------------------------
+file(GLOB_RECURSE DE_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/*.cpp")
+file(GLOB_RECURSE DE_HEADERS CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/src/*.hpp"
-    "${CMAKE_SOURCE_DIR}/src/*.h"
+    "${CMAKE_SOURCE_DIR}/src/*.h")
+
+list(FILTER DE_SOURCES EXCLUDE REGEX "/third_party/")
+list(FILTER DE_HEADERS EXCLUDE REGEX "/third_party/")
+
+file(GLOB_RECURSE DE_THIRD_PARTY_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/src/third_party/*.cpp")
+
+# Vendored third-party libraries (imgui and friends) build as a plain static
+# library: no project warnings, headers exposed as SYSTEM.
+add_library(de_third_party STATIC ${DE_THIRD_PARTY_SOURCES})
+target_include_directories(de_third_party SYSTEM PUBLIC
+    "${CMAKE_SOURCE_DIR}/src/third_party"
+    "${CMAKE_SOURCE_DIR}/src/third_party/imgui"
+    "${CMAKE_SOURCE_DIR}/src/third_party/imgui/backends")
+
+target_link_libraries(de_third_party PRIVATE Vulkan::Vulkan)
+# ImGui backends are compiled here, so GLFW and Vulkan must be visible to them.
+target_link_libraries(de_third_party PUBLIC glfw Vulkan::Vulkan)
+# Headers are listed in the target so an IDE shows them; they are never
+# compiled on their own.
+
+add_executable(vulkan_tutorial ${DE_SOURCES} ${DE_HEADERS})
+
+target_include_directories(vulkan_tutorial PRIVATE "${CMAKE_SOURCE_DIR}/src")
+
+target_link_libraries(vulkan_tutorial PRIVATE
+    de_third_party
+    glm::glm
+    glfw
+    tinyobjloader
+    Vulkan::Vulkan
 )
 
-add_executable(vulkan_tutorial ${VULKAN_TUTORIAL_SOURCES} ${VULKAN_TUTORIAL_HEADERS})
-
-option(VKENGINE_TIME_TRACE "Emit clang -ftime-trace JSON" OFF)
+# ---------------------------------------------------------------------------
+# Compiler flags
+# ---------------------------------------------------------------------------
+if(DE_WARNINGS AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(vulkan_tutorial PRIVATE -Wall -Wextra)
+endif()
 
 if(VKENGINE_TIME_TRACE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(vulkan_tutorial PRIVATE
-        $<$<COMPILE_LANGUAGE:CXX>:-ftime-trace>
-        $<$<COMPILE_LANGUAGE:CXX>:-ftime-trace-granularity=500>)
+        -ftime-trace
+        -ftime-trace-granularity=500)
 endif()
-
-option(VK_HARD_VALIDATION
-    "Enable synchronization and GPU-assisted validation in Debug"
-    OFF
-)
 
 if(VK_HARD_VALIDATION)
-    target_compile_definitions(vulkan_tutorial PRIVATE
-        DE_VK_HARD_VALIDATION=1
-    )
+    target_compile_definitions(vulkan_tutorial PRIVATE DE_VK_HARD_VALIDATION=1)
 endif()
 
-# ---- Автоматическая генерация фильтров Solution Explorer по реальной структуре папок ----
-# Без этого VS/CMake кладёт все .cpp в один плоский "Source Files" и не видит подпапки
-# (Systems/, Utility/). TREE-режим source_group строит дерево фильтров 1-в-1 с файловой системой.
-source_group(TREE "${CMAKE_SOURCE_DIR}/src" FILES ${VULKAN_TUTORIAL_SOURCES} ${VULKAN_TUTORIAL_HEADERS})
+# Run the executable from the project root when started from an IDE, because
+# the application loads assets through relative paths.
+set_target_properties(vulkan_tutorial PROPERTIES
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 
-target_include_directories(vulkan_tutorial PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/third_party/imgui
-    ${Vulkan_INCLUDE_DIRS}
-)
-
-# ---- Шейдеры лежат в Shaders/ на уровне корня проекта, рядом с Models/ ----
-# Автопоиск: компилируется любой файл с расширением, которое понимает glslc,
-# независимо от имени — не нужно перечислять каждый шейдер вручную.
+# ---------------------------------------------------------------------------
+# Shaders
+# Every file with a shader extension is compiled, so adding a shader needs no
+# CMake change. Output goes to Shaders/bin, the path the application reads.
+# ---------------------------------------------------------------------------
 set(SHADER_SOURCE_DIR "${CMAKE_SOURCE_DIR}/Shaders")
+
 if(DE_PACKAGE_RELEASE)
-    # Keep packaged-build shader output separate from the Debug build.
+    # Packaged builds write SPIR-V outside the source tree.
     set(SHADER_BINARY_DIR "${CMAKE_BINARY_DIR}/de-compiled-shaders")
 else()
     set(SHADER_BINARY_DIR "${SHADER_SOURCE_DIR}/bin")
@@ -127,18 +147,6 @@ file(GLOB_RECURSE SHADER_SOURCES CONFIGURE_DEPENDS
     "${SHADER_SOURCE_DIR}/*.rmiss"
     "${SHADER_SOURCE_DIR}/*.rchit"
 )
-
-# Показываем исходники шейдеров в Solution Explorer как часть таргета,
-# сгруппированные в отдельный фильтр "Shaders" (файлы не компилируются VS,
-# только отображаются и участвуют в отслеживании изменений через custom command DEPENDS).
-if(SHADER_SOURCES)
-    target_sources(vulkan_tutorial PRIVATE ${SHADER_SOURCES})
-    set_source_files_properties(${SHADER_SOURCES} PROPERTIES
-        VS_TOOL_OVERRIDE "None"
-        HEADER_FILE_ONLY TRUE
-    )
-    source_group(TREE "${SHADER_SOURCE_DIR}" PREFIX "Shaders" FILES ${SHADER_SOURCES})
-endif()
 
 if(GLSLC_EXECUTABLE)
     set(COMPILED_SHADERS "")
@@ -161,6 +169,7 @@ if(GLSLC_EXECUTABLE)
     add_custom_target(compile_shaders ALL DEPENDS ${COMPILED_SHADERS})
     add_dependencies(vulkan_tutorial compile_shaders)
 
+    # Keep a copy next to the executable as well.
     add_custom_command(TARGET vulkan_tutorial POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${SHADER_BINARY_DIR}"
@@ -171,19 +180,9 @@ else()
     message(WARNING "glslc not found, shaders will not be compiled")
 endif()
 
-set_target_properties(vulkan_tutorial PROPERTIES
-    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-)
-
-target_link_libraries(vulkan_tutorial PRIVATE
-    glm::glm
-    glfw
-    tinyobjloader
-    ${Vulkan_LIBRARIES}
-)
-
-# ---- Windows Release package (opt-in) ----
-# The normal Debug build does not enable these install rules.
+# ---------------------------------------------------------------------------
+# Windows runtime package (opt-in)
+# ---------------------------------------------------------------------------
 if(DE_PACKAGE_RELEASE)
     if(NOT WIN32)
         message(FATAL_ERROR "DE_PACKAGE_RELEASE is intended for Windows")
@@ -195,8 +194,19 @@ if(DE_PACKAGE_RELEASE)
         message(FATAL_ERROR "No compiled shader outputs were configured")
     endif()
 
-    # Runtime DLLs are searched next to the compiler and, if these targets
-    # are shared libraries, next to their build outputs as well.
+    # Refuse to package anything but an actual Release build.
+    install(CODE [=[
+        if(NOT CMAKE_INSTALL_CONFIG_NAME STREQUAL "Release")
+            message(FATAL_ERROR "The DE_Runtime package requires the Release configuration")
+        endif()
+    ]=] COMPONENT DE_Runtime)
+
+    install(TARGETS vulkan_tutorial
+        RUNTIME DESTINATION "." COMPONENT DE_Runtime
+    )
+
+    # Runtime DLLs are looked up next to the compiler and next to the build
+    # outputs of any dependency that is built as a shared library.
     get_filename_component(DE_COMPILER_BIN "${CMAKE_CXX_COMPILER}" DIRECTORY)
     set(DE_RUNTIME_SEARCH_DIRS "${DE_COMPILER_BIN}")
     foreach(DE_DEP_TARGET IN ITEMS glfw glm::glm tinyobjloader)
@@ -208,24 +218,13 @@ if(DE_PACKAGE_RELEASE)
         endif()
     endforeach()
 
-    # Refuse to assemble a Debug or other configuration as a Release package.
-    install(CODE [=[
-        if(NOT CMAKE_INSTALL_CONFIG_NAME STREQUAL "Release")
-            message(FATAL_ERROR "The DE_Runtime package requires the Release configuration")
-        endif()
-    ]=] COMPONENT DE_Runtime)
-
-    install(TARGETS vulkan_tutorial
-        RUNTIME DESTINATION "." COMPONENT DE_Runtime
-    )
-
-    # Scan the executable's imported DLLs recursively. We use file() here
-    # rather than an install dependency set so DLLs built by this project are
-    # not automatically excluded from the scan.
+    # Scan the executable's imported DLLs recursively. file() is used instead of
+    # an install dependency set so DLLs built by this project are not skipped.
     set(DE_RUNTIME_DIR_LINES "")
     foreach(DE_RUNTIME_DIR IN LISTS DE_RUNTIME_SEARCH_DIRS)
         string(APPEND DE_RUNTIME_DIR_LINES "\n            \"${DE_RUNTIME_DIR}\"")
     endforeach()
+
     set(DE_INSTALL_DLL_CODE [=[
         file(GET_RUNTIME_DEPENDENCIES
             RESOLVED_DEPENDENCIES_VAR DE_RESOLVED_DLLS
@@ -247,25 +246,29 @@ if(DE_PACKAGE_RELEASE)
     string(CONFIGURE "${DE_INSTALL_DLL_CODE}" DE_INSTALL_DLL_CODE @ONLY)
     install(CODE "${DE_INSTALL_DLL_CODE}" COMPONENT DE_Runtime)
 
-    # Only outputs from configured shader sources, not arbitrary old .spv files.
+    # Only configured shader outputs, never stale .spv files.
     install(FILES ${COMPILED_SHADERS}
         DESTINATION "Shaders/bin" COMPONENT DE_Runtime
     )
 
-    # Copy complete asset directories. Omit generated OBJ caches so that
-    # caches created by another build/compiler are not reused accidentally.
-    install(DIRECTORY
-        "${CMAKE_SOURCE_DIR}/assets"
+    # Asset directories, without generated model caches from other builds.
+    set(DE_ASSET_DIRS
         "${CMAKE_SOURCE_DIR}/Models"
         "${CMAKE_SOURCE_DIR}/Materials"
         "${CMAKE_SOURCE_DIR}/Fonts"
+    )
+    if(EXISTS "${CMAKE_SOURCE_DIR}/assets")
+        list(APPEND DE_ASSET_DIRS "${CMAKE_SOURCE_DIR}/assets")
+    endif()
+
+    install(DIRECTORY ${DE_ASSET_DIRS}
         DESTINATION "." COMPONENT DE_Runtime
         PATTERN "*.obj.mesh" EXCLUDE
         PATTERN "*.obj.matCache" EXCLUDE
     )
 
-    # The application uses relative paths. This launcher makes the package
-    # directory the working directory without changing the C++ application.
+    # The application uses relative paths, so the launcher makes the package
+    # directory the working directory.
     file(GENERATE
         OUTPUT "${CMAKE_BINARY_DIR}/de-package-run.bat"
         CONTENT [=[@echo off
@@ -283,8 +286,8 @@ exit /b %ERRORLEVEL%
     set(DE_PACKAGE_DIR "${CMAKE_BINARY_DIR}/release-package" CACHE PATH
         "Output directory for the Release runtime package")
 
-    # Depends on the executable, which itself depends on compile_shaders.
-    # Installation overlays the directory; it does not delete old files.
+    # Depends on the executable, which depends on compile_shaders. Installation
+    # overlays the directory and does not delete stale files.
     add_custom_target(stage_release
         COMMAND "${CMAKE_COMMAND}" --install "${CMAKE_BINARY_DIR}"
             --config "$<CONFIG>" --component DE_Runtime --prefix "${DE_PACKAGE_DIR}"
