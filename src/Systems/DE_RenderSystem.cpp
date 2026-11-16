@@ -1,5 +1,6 @@
 #include"DE_RenderSystem.hpp"
 #include"core/DE_RenderContext.hpp"
+#include"core/DE_PAssContext.hpp"
 #include"core/DE_Assert.hpp"
 #include"DE_GeometryPool.hpp"
 #include"DE_Descriptors.hpp"
@@ -16,13 +17,13 @@
 
 namespace de {
 
-	RenderSystem::RenderSystem (const RenderContext& renderContext, const RenderPass& renderPass) 
+	RenderSystem::RenderSystem (const RenderContext& renderContext, const PassContext& passContext) 
 		:device_{renderContext.device},
-		renderPass_{renderPass},
-		extent_{renderContext.extent}{
+		renderPass_{passContext.renderPass},
+		extent_{passContext.extent}{
 
-		vertexShader_ = std::make_unique<de::Shader>(device_, "Shaders/bin/vertex.vert.spv");
-		fragmentShader_ = std::make_unique<de::Shader>(device_, "Shaders/bin/fragment.frag.spv");
+		vertexShader_ = std::make_unique<de::Shader>(*device_, "Shaders/bin/vertex.vert.spv");
+		fragmentShader_ = std::make_unique<de::Shader>(*device_, "Shaders/bin/fragment.frag.spv");
 
 
 		auto layouts = kRequiredSlots
@@ -40,79 +41,6 @@ namespace de {
 	}
 
 	void RenderSystem::renderGameObjects(const FrameInfo& frameInfo){
-
-	#if OLD_RENDER
-		if (materialDescriptorSet_) {
-			frameInfo.commandBuffer.bindDescriptorSets(
-				vk::PipelineBindPoint::eGraphics,
-				*graphicsPipeline_->getLayout(), 1, materialDescriptorSet_, {}
-			);
-		}
-
-		if (materialBufferDescriptorSet_) {
-			frameInfo.commandBuffer.bindDescriptorSets(
-				vk::PipelineBindPoint::eGraphics,
-				*graphicsPipeline_->getLayout(), 2, materialBufferDescriptorSet_, {}
-			);
-		}
-
-		bindSet(frameInfo.commandBuffer,*graphicsPipeline_->getLayout(),
-			SetSlot::eGlobal, frameInfo.descriptorSet);
-
-		frameInfo.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_->getPipeline());
-
-		if (geometryPool_) {
-			geometryPool_->bind(frameInfo.commandBuffer);
-		}
-
-		std::vector<GPUTransformData> transforms;
-		std::vector<vk::DrawIndexedIndirectCommand> indirectCommands;
-		uint32_t instanceIndex = 0;
-		for (auto& kv : frameInfo.gameObjects) {
-
-			auto& object = kv.second;
-			if (!object.mesh) continue;
-
-			const auto normalMatrix = object.transform.normalMatrix();
-			const auto modelMatrix = object.transform.mat4();
-			const auto& subMeshes = object.mesh->getSubMeshes();
-			
-			for (size_t i = 0; i < subMeshes.size(); ++i){
-				const Material* material = (i < object.materialsByMesh_.size() && object.materialsByMesh_.at(i)) ?
-					object.materialsByMesh_.at(i).get() : defaultMaterial_.get();
-
-				transforms.push_back(GPUTransformData{
-					.modelMatrix = modelMatrix,
-					.normalMatrix = normalMatrix,
-					.materialIndex = material->getMaterialIndex(frameInfo.frameIndex)
-				});
-				indirectCommands.push_back(object.mesh->getIndirectCommand(
-					static_cast<uint32_t>(i), instanceIndex)
-				);
-				++instanceIndex;
-			}
-		}
-
-			if (transformBuffer_) {
-				transformBuffer_->upload(frameInfo.frameIndex, transforms);
-				frameInfo.commandBuffer.bindDescriptorSets(
-					vk::PipelineBindPoint::eGraphics,
-					*graphicsPipeline_->getLayout(), 3,
-					transformBuffer_->getDescriptorSet(frameInfo.frameIndex), {}
-				);
-			}
-
-			if (indirectBuffer_ && !indirectCommands.empty()) {
-				indirectBuffer_->upload(frameInfo.frameIndex, indirectCommands);
-				
-				frameInfo.commandBuffer.drawIndexedIndirect(
-					indirectBuffer_->getBuffer(frameInfo.frameIndex),
-					0,
-					static_cast<uint32_t>(indirectCommands.size()),
-					sizeof(vk::DrawIndexedIndirectCommand)
-				);
-			}
-		#endif
 
 		const auto pipelineLayout = *graphicsPipeline_->getLayout();
 		const auto pipeline = *graphicsPipeline_->getPipeline();
@@ -229,7 +157,7 @@ namespace de {
 		auto builder = de::GraphicsBuilder()
 			.addFragmentShader("main", fragmentShader_->getShaderModule())
 			.addVertexShader("main", vertexShader_->getShaderModule())
-			.setRenderPass(*renderPass_.getRenderPass())
+			.setRenderPass(*renderPass_->getRenderPass())
 			.setInputAssemblyState(vk::PrimitiveTopology::eTriangleList)
 			.setViewportState(extent)
 			.setRasterizationState(rasterizationState)

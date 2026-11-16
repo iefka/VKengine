@@ -18,7 +18,8 @@
 
 namespace de {
 
-	class RenderContext;
+	struct RenderContext;
+	struct PassContext;
 	class RenderPass;
 	class GameObject;
 	class Camera;
@@ -33,7 +34,7 @@ namespace de {
 	class RenderSystem {
 	public:
 
-		RenderSystem(const RenderContext& renderContext, const RenderPass& renderPass);
+		RenderSystem(const RenderContext& renderContext, const PassContext& passContext);
 		
 		void setDefaultMaterial(std::shared_ptr<Material> material) noexcept {
 			defaultMaterial_ = std::move(material);
@@ -58,7 +59,7 @@ namespace de {
 		void createPipeline(const vk::Extent2D extent, std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts);
 		
 		const Device* device_;
-		const RenderPass& renderPass_;
+		const RenderPass* renderPass_;
 		vk::Extent2D extent_;
 
 		inline static constexpr std::array<SetSlot, 4> kRequiredSlots{
