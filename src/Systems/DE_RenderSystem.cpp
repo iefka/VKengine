@@ -1,4 +1,6 @@
 #include"DE_RenderSystem.hpp"
+#include"core/DE_RenderContext.hpp"
+#include"core/DE_Assert.hpp"
 #include"DE_GeometryPool.hpp"
 #include"DE_Descriptors.hpp"
 #include"DE_Device.hpp"
@@ -7,24 +9,29 @@
 #include"DE_RenderPass.hpp"
 #include"DE_FrameData.hpp"
 #include"Material.hpp"
-#include"SSBO/DE_TransformBuffer.hpp"
 #include"DE_IndirectCommandBuffer.hpp"
-#include"ranges"
+#include<ranges>
+
+#include<vector>
 
 namespace de {
 
-	RenderSystem::RenderSystem(const Device& device,
-		const RenderPass& renderPass,
-		const vk::Extent2D extent,
-		std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts) :
-		device_{device},
+	RenderSystem::RenderSystem (const RenderContext& renderContext, const RenderPass& renderPass) 
+		:device_{renderContext.device},
 		renderPass_{renderPass},
-		extent_{extent}{
+		extent_{renderContext.extent}{
 
 		vertexShader_ = std::make_unique<de::Shader>(device_, "Shaders/bin/vertex.vert.spv");
 		fragmentShader_ = std::make_unique<de::Shader>(device_, "Shaders/bin/fragment.frag.spv");
 
-		createPipeline(extent, descriptorSetLayouts);
+
+		auto layouts = kRequiredSlots
+		|std::views::transform([&](auto slot){
+			return renderContext.descriptorLayouts->get(slot);
+		})
+		|std::ranges::to<std::vector>();
+
+		createPipeline(extent_, layouts);
 
 	}
 
@@ -34,6 +41,7 @@ namespace de {
 
 	void RenderSystem::renderGameObjects(const FrameInfo& frameInfo){
 
+	#if OLD_RENDER
 		if (materialDescriptorSet_) {
 			frameInfo.commandBuffer.bindDescriptorSets(
 				vk::PipelineBindPoint::eGraphics,
@@ -48,7 +56,8 @@ namespace de {
 			);
 		}
 
-		frameInfo.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_->getLayout(), 0, frameInfo.descriptorSet, {});
+		bindSet(frameInfo.commandBuffer,*graphicsPipeline_->getLayout(),
+			SetSlot::eGlobal, frameInfo.descriptorSet);
 
 		frameInfo.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_->getPipeline());
 
@@ -103,7 +112,78 @@ namespace de {
 					sizeof(vk::DrawIndexedIndirectCommand)
 				);
 			}
+		#endif
+
+		const auto pipelineLayout = *graphicsPipeline_->getLayout();
+		const auto pipeline = *graphicsPipeline_->getPipeline();
+		const auto cmd = frameInfo.commandBuffer;
+		transforms_.clear();
+		indirectCommands_.clear();
+
+		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics,pipeline);
+
+		if (geometryPool_) {
+			geometryPool_->bind(frameInfo.commandBuffer);
+		}
+
+		uint32_t instanceIndex = 0;
+		for (auto& kv : frameInfo.gameObjects) {
+
+			auto& object = kv.second;
+			if (!object.mesh) continue;
+
+			const auto normalMatrix = object.transform.normalMatrix();
+			const auto modelMatrix = object.transform.mat4();
+			const auto& subMeshes = object.mesh->getSubMeshes();
+			
+			for (size_t i = 0; i < subMeshes.size(); ++i){
+				const Material* material = (i < object.materialsByMesh_.size() && object.materialsByMesh_.at(i)) ?
+					object.materialsByMesh_.at(i).get() : defaultMaterial_.get();
+
+				transforms_.push_back(GPUTransformData{
+					.modelMatrix = modelMatrix,
+					.normalMatrix = normalMatrix,
+					.materialIndex = material->getMaterialIndex(frameInfo.frameIndex)
+				});
+				indirectCommands_.push_back(object.mesh->getIndirectCommand(
+					static_cast<uint32_t>(i), instanceIndex)
+				);
+				++instanceIndex;
+			}
+		}
+
+		if(transformBuffer_){
+			transformBuffer_->upload(frameInfo.frameIndex, transforms_);
+		}
+		if(indirectBuffer_){
+			indirectBuffer_->upload(frameInfo.frameIndex, indirectCommands_);
+		}
+
+		std::array<vk::DescriptorSet, kSetSlotCount> sets{};
+		sets[std::to_underlying(SetSlot::eGlobal)] = frameInfo.descriptorSet;
+		sets[std::to_underlying(SetSlot::eTextures)] = materialDescriptorSet_;
+		sets[std::to_underlying(SetSlot::eMaterialData)] = materialBufferDescriptorSet_;
+		sets[std::to_underlying(SetSlot::eTransform)] =  
+			transformBuffer_->getDescriptorSet(frameInfo.frameIndex);
 		
+		for(uint32_t i = 0; i < kRequiredSlots.size(); ++i){
+			DE_ASSERT(sets[i]);
+		}
+		
+
+		bindSets(cmd,pipelineLayout, SetSlot::eGlobal, sets);
+
+		DE_ASSERT(transformBuffer_ && indirectBuffer_ && defaultMaterial_);
+		if (indirectBuffer_ && !indirectCommands_.empty()) {
+				
+			frameInfo.commandBuffer.drawIndexedIndirect(
+				indirectBuffer_->getBuffer(frameInfo.frameIndex),
+				0,
+				static_cast<uint32_t>(indirectCommands_.size()),
+				sizeof(vk::DrawIndexedIndirectCommand)
+			);
+		}
+
 	}
 
 	void RenderSystem::createPipeline(const vk::Extent2D extent, std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts) {

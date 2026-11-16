@@ -1,7 +1,7 @@
 #include "DE_Shaders.hpp"
 #include"DE_Device.hpp"
+
 //std
-//!возможно нужно будет перенести в хедер если будут ошибки!
 #include<fstream>
 #include<exception>
 #include<iostream>

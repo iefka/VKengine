@@ -6,14 +6,19 @@
 #include<vulkan/vulkan.hpp>
 #include<memory>
 #include<vector>
+#include<utility>
+#include<array>
 
 #include"DE_Pipeline.hpp"
+#include"SSBO/DE_TransformBuffer.hpp"
 #include"DE_Shaders.hpp"
 #include"DE_PushConstants.hpp"
+#include"core/DE_SetSlot.hpp"
+
 
 namespace de {
 
-	class Device;
+	class RenderContext;
 	class RenderPass;
 	class GameObject;
 	class Camera;
@@ -28,10 +33,7 @@ namespace de {
 	class RenderSystem {
 	public:
 
-		RenderSystem(const Device& device,
-			const RenderPass& renderPass,
-			 const vk::Extent2D extent,
-			std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts);
+		RenderSystem(const RenderContext& renderContext, const RenderPass& renderPass);
 		
 		void setDefaultMaterial(std::shared_ptr<Material> material) noexcept {
 			defaultMaterial_ = std::move(material);
@@ -55,10 +57,17 @@ namespace de {
 	private:
 		void createPipeline(const vk::Extent2D extent, std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts);
 		
-		const Device& device_;
+		const Device* device_;
 		const RenderPass& renderPass_;
 		vk::Extent2D extent_;
 
+		inline static constexpr std::array<SetSlot, 4> kRequiredSlots{
+			SetSlot::eGlobal, SetSlot::eTextures,
+			SetSlot::eMaterialData, SetSlot::eTransform
+		};
+		static_assert(kRequiredSlots.size() == kSetSlotCount);
+		static_assert(std::is_sorted(kRequiredSlots.begin(), kRequiredSlots.end()),
+					"layout index must equal to_underlying(SetSlot)");
 
 		std::unique_ptr<GraphicsPipeline> graphicsPipeline_ = nullptr;
 		std::unique_ptr<de::Shader> vertexShader_ = nullptr;
@@ -71,6 +80,9 @@ namespace de {
 
 		TransformBuffer* transformBuffer_ = nullptr;
 		IndirectCommandBuffer* indirectBuffer_ = nullptr;
+
+		std::vector<GPUTransformData> transforms_;
+		std::vector<vk::DrawIndexedIndirectCommand> indirectCommands_;
 	};
 
 }
