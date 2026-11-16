@@ -11,7 +11,7 @@ namespace de{
     
     vk::DescriptorSetLayout DescriptorSetLayoutCache::get(SetSlot slot) const {
         const auto it = layouts_.find(slot);
-        DE_ASSERT(it == layouts_.end() && "DescriptorSetLayoutCache: slot not filled");
+        DE_ASSERT(it != layouts_.end() && "DescriptorSetLayoutCache: slot not filled");
            
         return it->second;
     }

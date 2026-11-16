@@ -92,7 +92,10 @@ namespace de {
 		sets[std::to_underlying(SetSlot::eTransforms)] =  
 			transformBuffer_->getDescriptorSet(frameInfo.frameIndex);
 		
-		
+		for (uint32_t i = 0; i < kSlots.size(); ++i) {
+			DE_ASSERT(sets[i]);
+		}
+
 		bindSets(cmd,pipelineLayout, SetSlot::eGlobal, sets);
 
 		if (!indirectCommands_.empty()) {
@@ -161,6 +164,6 @@ namespace de {
 			.setColorBlendState(colorBlendState)
 			.setDepthStencilState(depthStencil);
 
-		graphicsPipeline_ = std::make_unique<de::GraphicsPipeline>(device_, builder);
+		graphicsPipeline_ = std::make_unique<de::GraphicsPipeline>(*device_, builder);
 	}
 }

@@ -10,7 +10,6 @@
 namespace de{
     enum class SetSlot : uint32_t {eGlobal = 0, eTextures = 1,
          eMaterialData = 2, eTransforms = 3};
-    inline constexpr uint32_t kSetSlotCount = 4;
 
     consteval bool areConsecutiveFromZero(std::span<const SetSlot> slots) {
         for (uint32_t i = 0; i < slots.size(); ++i)

@@ -8,7 +8,6 @@
 #include<vector>
 #include<utility>
 #include<array>
-#include<algorithm>
 
 #include"DE_Pipeline.hpp"
 #include"SSBO/DE_TransformData.hpp"

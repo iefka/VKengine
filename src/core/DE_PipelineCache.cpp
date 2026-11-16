@@ -25,7 +25,7 @@ namespace de{
                 static_cast<std::streamsize>(size)
             );
         }else{
-            std::println("PipelineCache: no usable cache at {}, starting cold", filePath_);
+            std::println("PipelineCache: no usable cache at {}, starting cold", filePath_.string());
         }
 
         vk::PipelineCacheCreateInfo cacheCreateInfo{};
