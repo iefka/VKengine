@@ -16,7 +16,7 @@ namespace de{
             .setMaxSets(maxSets)
             .setPoolSizes(sizes);
 
-        pools_.reserve(framesInFlight)
+        pools_.reserve(framesInFlight);
         for (uint32_t i = 0; i < framesInFlight; ++i){
             pools_.push_back(
                 logicalDevice.createDescriptorPoolUnique(poolInfo)
@@ -27,7 +27,7 @@ namespace de{
     
     vk::DescriptorSet DescriptorArena::allocate(uint32_t frameIndex, 
         vk::DescriptorSetLayout layout){
-        DE_(frameIndex < pools_.size() && "frame index out of range");
+        DE_ASSERT(frameIndex < pools_.size() && "frame index out of range");
 
         const auto& logicalDevice = device_->getLogicalDevice();
 

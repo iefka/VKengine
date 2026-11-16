@@ -11,7 +11,7 @@
 #include<algorithm>
 
 #include"DE_Pipeline.hpp"
-#include"SSBO/DE_TransformBuffer.hpp"
+#include"SSBO/DE_TransformData.hpp"
 #include"DE_Shaders.hpp"
 #include"DE_PushConstants.hpp"
 #include"core/DE_SetSlot.hpp"
@@ -62,13 +62,9 @@ namespace de {
 		const Device* device_;
 		const RenderPass* renderPass_;
 
-		inline static constexpr std::array<SetSlot, 4> kRequiredSlots{
-			SetSlot::eGlobal, SetSlot::eTextures,
-			SetSlot::eMaterialData, SetSlot::eTransforms
-		};
-		static_assert(kRequiredSlots.size() == kSetSlotCount);
-		static_assert(std::is_sorted(kRequiredSlots.begin(), kRequiredSlots.end()),
-					"layout index must equal to_underlying(SetSlot)");
+		inline static constexpr std::array kSlots{ SetSlot::eGlobal, SetSlot::eTextures,
+        	SetSlot::eMaterialData, SetSlot::eTransforms };
+		static_assert(de::areConsecutiveFromZero(kSlots), "slots must be 0..N-1 in order");
 
 		std::unique_ptr<GraphicsPipeline> graphicsPipeline_ = nullptr;
 		std::unique_ptr<de::Shader> vertexShader_ = nullptr;

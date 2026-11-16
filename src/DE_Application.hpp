@@ -35,7 +35,8 @@ namespace de {
 	class TransformBuffer;
 	class IndirectCommandBuffer;
 	class DescriptorSetLayoutCache;
-}   class PipelineCache;
+	class PipelineCache;
+}   
 
 class AppTimer {
 public:

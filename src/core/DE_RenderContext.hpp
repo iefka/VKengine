@@ -9,7 +9,7 @@
 
 namespace de{
     struct RenderContext{
-        Device* device;
+        const Device* device;
         const DescriptorSetLayoutCache* descriptorLayouts;
         DescriptorArena* descriptors;
         const PipelineCache* pipelinesCache;

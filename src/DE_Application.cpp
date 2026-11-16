@@ -325,13 +325,12 @@ void Application::initGameObjects() {
 void Application::initSystems(){
 
 	layoutCache_ = std::make_unique<de::DescriptorSetLayoutCache>();
-	pipelineCache_ = std::make_unique<de::PipelineCache>();
+	pipelineCache_ = std::make_unique<de::PipelineCache>(device_.get());
 
-	// registration only: the cache stores non-owning handles, old paths keep working
-	layoutCache_->fillSlot(de::SetSlot::eGlobal,       descriptorLayouts_.at("ubo").getLayout());
-	layoutCache_->fillSlot(de::SetSlot::eTextures,     bindlessRegistry_->getDescriptorLayout());
-	layoutCache_->fillSlot(de::SetSlot::eMaterialData, materialBuffer_->getDescriptorLayout().getLayout());
-	layoutCache_->fillSlot(de::SetSlot::eTransforms,    transformBuffer_->getDescriptorLayout().getLayout());
+	layoutCache_->ensure(de::SetSlot::eGlobal,       descriptorLayouts_.at("ubo").getLayout());
+	layoutCache_->ensure(de::SetSlot::eTextures,     bindlessRegistry_->getDescriptorLayout());
+	layoutCache_->ensure(de::SetSlot::eMaterialData, materialBuffer_->getDescriptorLayout().getLayout());
+	layoutCache_->ensure(de::SetSlot::eTransforms,    transformBuffer_->getDescriptorLayout().getLayout());
 
 	de::RenderContext renderContext{
 		.device = device_.get(),
@@ -346,14 +345,6 @@ void Application::initSystems(){
 
 	};
 
-
-	//renderSystem
-	std::vector<vk::DescriptorSetLayout> renderSystemLayouts{
-		descriptorLayouts_.at("ubo").getLayout(),
-		bindlessRegistry_->getDescriptorLayout(),
-		materialBuffer_->getDescriptorLayout().getLayout(),
-		transformBuffer_->getDescriptorLayout().getLayout()
-	};
 	renderSystem_ = std::make_unique<de::RenderSystem>(renderContext, passContext);
 	renderSystem_->setGeometryPool(*geometryPool);
 	renderSystem_->setDefaultMaterial(materialManager_->getDefaultMaterial());

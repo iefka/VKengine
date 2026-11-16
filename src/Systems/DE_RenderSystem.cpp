@@ -10,6 +10,7 @@
 #include"DE_RenderPass.hpp"
 #include"DE_FrameData.hpp"
 #include"Material.hpp"
+#include"SSBO/DE_TransformBuffer.hpp"
 #include"DE_IndirectCommandBuffer.hpp"
 #include<ranges>
 
@@ -25,7 +26,7 @@ namespace de {
 		fragmentShader_ = std::make_unique<de::Shader>(*device_, "Shaders/bin/fragment.frag.spv");
 
 
-		auto layouts = kRequiredSlots
+		auto layouts = kSlots
 		|std::views::transform([&](auto slot){
 			return renderContext.descriptorLayouts->get(slot);
 		})
@@ -79,27 +80,22 @@ namespace de {
 			}
 		}
 
-		if(transformBuffer_){
-			transformBuffer_->upload(frameInfo.frameIndex, transforms_);
-		}
-		if(indirectBuffer_){
-			indirectBuffer_->upload(frameInfo.frameIndex, indirectCommands_);
-		}
+	
+		transformBuffer_->upload(frameInfo.frameIndex, transforms_);
+		indirectBuffer_->upload(frameInfo.frameIndex, indirectCommands_);
+		
 
-		std::array<vk::DescriptorSet, kSetSlotCount> sets{};
+		std::array<vk::DescriptorSet, kSlots.size()> sets{};
 		sets[std::to_underlying(SetSlot::eGlobal)] = frameInfo.descriptorSet;
 		sets[std::to_underlying(SetSlot::eTextures)] = materialDescriptorSet_;
 		sets[std::to_underlying(SetSlot::eMaterialData)] = materialBufferDescriptorSet_;
 		sets[std::to_underlying(SetSlot::eTransforms)] =  
 			transformBuffer_->getDescriptorSet(frameInfo.frameIndex);
 		
-		for(uint32_t i = 0; i < kRequiredSlots.size(); ++i){
-			DE_ASSERT(sets[i]);
-		}
 		
 		bindSets(cmd,pipelineLayout, SetSlot::eGlobal, sets);
 
-		if (indirectBuffer_ && !indirectCommands_.empty()) {
+		if (!indirectCommands_.empty()) {
 				
 			frameInfo.commandBuffer.drawIndexedIndirect(
 				indirectBuffer_->getBuffer(frameInfo.frameIndex),

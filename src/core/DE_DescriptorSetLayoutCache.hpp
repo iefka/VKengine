@@ -8,7 +8,7 @@
 namespace de{
     class DescriptorSetLayoutCache{
     public:
-        void fillSlot(SetSlot slot, vk::DescriptorSetLayout layout);
+        void ensure(SetSlot slot, vk::DescriptorSetLayout layout);
          vk::DescriptorSetLayout get(SetSlot slot) const ;
     private:
         std::unordered_map<SetSlot, vk::DescriptorSetLayout> layouts_;

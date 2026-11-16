@@ -8,7 +8,7 @@ namespace de{
   
     struct PassContext{
         const RenderPass* renderPass;
-        vk::Framebuffer frameBuffer;
+        vk::Framebuffer frameBuffer = {};
         vk::Extent2D extent;
         vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1;
     };
