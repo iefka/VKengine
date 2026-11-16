@@ -10,8 +10,6 @@
 namespace de{
     struct RenderContext{
         Device* device;
-        vk::Extent2D extent;
-        vk::SampleCountFlagBits samples;
         const DescriptorSetLayoutCache* descriptorLayouts;
         DescriptorArena* descriptors;
         const PipelineCache* pipelinesCache;
