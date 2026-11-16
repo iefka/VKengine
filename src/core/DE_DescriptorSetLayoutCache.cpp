@@ -1,12 +1,12 @@
 #include "DE_DescriptorSetLayoutCache.hpp"
-
+#include"core/DE_Assert.hpp"
 namespace de{
 
     void DescriptorSetLayoutCache::fillSlot(SetSlot slot, vk::DescriptorSetLayout layout){
         [[maybe_unused]] auto [it, inserted] = 
             layouts_.try_emplace(slot, std::move(layout));
 
-        assert(inserted && "slot already filled");
+        DE_ASSERT(inserted && "slot already filled");
     }
 
     

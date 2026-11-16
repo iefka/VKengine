@@ -8,6 +8,7 @@
 #include<vector>
 #include<utility>
 #include<array>
+#include<algorithm>
 
 #include"DE_Pipeline.hpp"
 #include"SSBO/DE_TransformBuffer.hpp"
@@ -56,15 +57,14 @@ namespace de {
 
 		void renderGameObjects(const FrameInfo& frameInfo);
 	private:
-		void createPipeline(const vk::Extent2D extent, std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts);
+		void createPipeline(const vk::Extent2D extent, const std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts);
 		
 		const Device* device_;
 		const RenderPass* renderPass_;
-		vk::Extent2D extent_;
 
 		inline static constexpr std::array<SetSlot, 4> kRequiredSlots{
 			SetSlot::eGlobal, SetSlot::eTextures,
-			SetSlot::eMaterialData, SetSlot::eTransform
+			SetSlot::eMaterialData, SetSlot::eTransforms
 		};
 		static_assert(kRequiredSlots.size() == kSetSlotCount);
 		static_assert(std::is_sorted(kRequiredSlots.begin(), kRequiredSlots.end()),

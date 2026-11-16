@@ -1,5 +1,8 @@
 #include"DE_DescriptorArena.hpp"
 #include"DE_Device.hpp"
+#include"core/DE_Assert.hpp"
+
+#include<cstdint>
 
 
 namespace de{
@@ -13,7 +16,8 @@ namespace de{
             .setMaxSets(maxSets)
             .setPoolSizes(sizes);
 
-        for (size_t i = 0; i < framesInFlight; ++i){
+        pools_.reserve(framesInFlight)
+        for (uint32_t i = 0; i < framesInFlight; ++i){
             pools_.push_back(
                 logicalDevice.createDescriptorPoolUnique(poolInfo)
             );
@@ -23,7 +27,7 @@ namespace de{
     
     vk::DescriptorSet DescriptorArena::allocate(uint32_t frameIndex, 
         vk::DescriptorSetLayout layout){
-        assert(frameIndex < pools_.size() && "frame index out of range");
+        DE_(frameIndex < pools_.size() && "frame index out of range");
 
         const auto& logicalDevice = device_->getLogicalDevice();
 
@@ -35,7 +39,7 @@ namespace de{
     }
 
     void DescriptorArena::reset(uint32_t frameIndex){
-        assert(frameIndex < pools_.size() && "frame index out of range");
+        DE_ASSERT(frameIndex < pools_.size() && "frame index out of range");
 
         const auto& logicalDevice = device_->getLogicalDevice();
         logicalDevice.resetDescriptorPool(*pools_.at(frameIndex));

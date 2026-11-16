@@ -85,6 +85,7 @@ namespace de {
 		const RenderTarget& getSwapchainRenderTarget() const noexcept  { return swapchainTarget_; }
 
 		const RenderPass& getMainRenderPass() { return *renderPass_; }
+		RenderPass* getMainRenderPassPtr() { return renderPass_.get(); }
 
 		const Swapchain& getSwapchain()const noexcept { return swapchain_.value(); }
 		vk::Extent2D getSwapchainExtent() const noexcept {return swapchain_->getSwapchainExtent();}

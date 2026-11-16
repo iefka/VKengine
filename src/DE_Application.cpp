@@ -14,6 +14,8 @@
 #include "Utility/DE_Utility.hpp"
 #include "Material.hpp"
 #include "DE_MaterialData.hpp"
+#include"core/DE_PassContext.hpp"
+#include"core/DE_RenderContext.hpp"
 
 #include"third_party/imgui/imgui.h"
 #include"third_party/imgui/backends/imgui_impl_vulkan.h"
@@ -322,6 +324,29 @@ void Application::initGameObjects() {
 
 void Application::initSystems(){
 
+	layoutCache_ = std::make_unique<de::DescriptorSetLayoutCache>();
+	pipelineCache_ = std::make_unique<de::PipelineCache>();
+
+	// registration only: the cache stores non-owning handles, old paths keep working
+	layoutCache_->fillSlot(de::SetSlot::eGlobal,       descriptorLayouts_.at("ubo").getLayout());
+	layoutCache_->fillSlot(de::SetSlot::eTextures,     bindlessRegistry_->getDescriptorLayout());
+	layoutCache_->fillSlot(de::SetSlot::eMaterialData, materialBuffer_->getDescriptorLayout().getLayout());
+	layoutCache_->fillSlot(de::SetSlot::eTransforms,    transformBuffer_->getDescriptorLayout().getLayout());
+
+	de::RenderContext renderContext{
+		.device = device_.get(),
+		.descriptorLayouts = layoutCache_.get(),
+		.descriptors = nullptr,
+		.pipelinesCache = pipelineCache_.get()
+	};
+
+	de::PassContext passContext{
+		.renderPass = renderer_->getMainRenderPassPtr(),
+		.extent = window_.getExtent()
+
+	};
+
+
 	//renderSystem
 	std::vector<vk::DescriptorSetLayout> renderSystemLayouts{
 		descriptorLayouts_.at("ubo").getLayout(),
@@ -329,9 +354,7 @@ void Application::initSystems(){
 		materialBuffer_->getDescriptorLayout().getLayout(),
 		transformBuffer_->getDescriptorLayout().getLayout()
 	};
-	renderSystem_ = std::make_unique<de::RenderSystem>(
-		*device_, renderer_->getMainRenderPass(), window_.getExtent(), renderSystemLayouts
-	);
+	renderSystem_ = std::make_unique<de::RenderSystem>(renderContext, passContext);
 	renderSystem_->setGeometryPool(*geometryPool);
 	renderSystem_->setDefaultMaterial(materialManager_->getDefaultMaterial());
 	renderSystem_->setMaterialDescriptorSet(bindlessRegistry_->getDescriptorSet());

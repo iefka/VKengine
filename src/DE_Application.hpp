@@ -34,7 +34,8 @@ namespace de {
 	class MaterialBuffer;
 	class TransformBuffer;
 	class IndirectCommandBuffer;
-}
+	class DescriptorSetLayoutCache;
+}   class PipelineCache;
 
 class AppTimer {
 public:
@@ -123,6 +124,10 @@ private:
 	std::unique_ptr<de::BindlessTextureRegistry>bindlessRegistry_;
 	std::unique_ptr<de::MainRenderPass> mainPass_;
 	std::unique_ptr<de::GUIRenderPass> guiPass_;
+
+	
+	std::unique_ptr<de::DescriptorSetLayoutCache> layoutCache_;
+	std::unique_ptr<de::PipelineCache> pipelineCache_;
 	std::unique_ptr<de::RenderSystem> renderSystem_;
 	std::unique_ptr<de::PointLightSystem> pointLightSystem_;
 	std::unique_ptr<de::SkyBoxSystem> skyboxSystem_;
