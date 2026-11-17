@@ -3,6 +3,7 @@
 #include<vulkan/vulkan.hpp>
 #include<memory>
 #include<vector>
+#include<span>
 
 #include"DE_Memory.hpp"
 #include"Utility/DE_RangeAllocator.hpp"
@@ -21,12 +22,12 @@ namespace de {
 
 
 		//load path for .obj files
-		GeometryHandle upload(const std::vector<Mesh::Vertex>& vertices,
-			const std::vector<uint32_t>& indices);
+		GeometryHandle upload(std::span<const Mesh::Vertex> vertices,
+			std::span<const uint32_t> indices);
 
 		//reserve range for compute geomety for further write
 		GeometryHandle reserveForCompute(uint32_t vertexCount,
-			const std::vector<uint32_t>& indices);
+			std::span<const uint32_t> indices);
 
 		
 
@@ -48,7 +49,7 @@ namespace de {
 		void growVertexBuffer(uint32_t additionalCount);
 		void growIndexBuffer(uint32_t additionalCount);
 
-		void uploadIndexData(uint32_t indexOffset, const std::vector<uint32_t>& indices);
+		void uploadIndexData(uint32_t indexOffset, std::span<const uint32_t> indices);
 
 		const Device& device_;
 

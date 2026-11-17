@@ -90,7 +90,7 @@ namespace de {
 		}
 	
 		void GeometryPool::uploadIndexData(uint32_t indexOffset,
-			const std::vector<uint32_t>& indices) {
+			std::span<const uint32_t> indices) {
 			if (indices.empty()) { return; }
 
 			const vk::DeviceSize bufferSize = sizeof(uint32_t) * indices.size();
@@ -112,8 +112,8 @@ namespace de {
 
 		}
 
-		GeometryHandle GeometryPool::upload(const std::vector<Mesh::Vertex>& vertices,
-			const std::vector<uint32_t>& indices) {
+		GeometryHandle GeometryPool::upload(std::span<const Mesh::Vertex> vertices,
+			std::span<const uint32_t> indices) {
 
 			const auto vertexCount = static_cast<uint32_t>(vertices.size());
 			const auto indexCount = static_cast<uint32_t>(indices.size());
@@ -158,7 +158,7 @@ namespace de {
 		}
 
 		GeometryHandle GeometryPool::reserveForCompute(uint32_t vertexCount,
-			const std::vector<uint32_t>& indices) {
+			std::span<const uint32_t> indices) {
 			
 			const auto indexCount = static_cast<uint32_t>(indices.size());
 
