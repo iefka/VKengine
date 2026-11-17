@@ -252,7 +252,7 @@ namespace de {
 	}
 
 	Texture::Texture(const Device& device, vk::Format textureFormat,
-		void* data, uint32_t width, uint32_t height,
+		std::span<std::byte> data, uint32_t width, uint32_t height,
 		vk::SamplerAddressMode addressMode,
 		bool enableAnisotropy,
 		vk::ImageType imgType) {
@@ -260,7 +260,7 @@ namespace de {
 		uint32_t pixelSize = utl::getFormatSize(textureFormat);
 
 		vk::DeviceSize imageSize = width * height * pixelSize;
-		if (!data) {
+		if (data.empty()) {
 			throw std::runtime_error("texture data is nullptr");
 		}
 
@@ -274,7 +274,7 @@ namespace de {
 		Buffer stagingBuffer(device, stagingBuferInfo);
 
 		stagingBuffer.map();
-		stagingBuffer.copyToBuffer(data, imageSize, 0);
+		stagingBuffer.copyToBuffer(data.data(), imageSize, 0);
 
 		ImageUsageInfo imageUsage{
 			imageSize,

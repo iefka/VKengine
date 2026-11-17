@@ -2,6 +2,8 @@
 #include"DE_Descriptors.hpp"
 #include"DE_Device.hpp"
 #include"DE_Camera.hpp"
+#include"core/DE_PassContext.hpp"
+#include"core/DE_RenderContext.hpp"
 #include"DE_RenderPass.hpp"
 #include"DE_FrameData.hpp"
 
@@ -9,18 +11,21 @@
 
 namespace de {
 
-	PointLightSystem::PointLightSystem(const Device& device,
-		const RenderPass& renderPass,
-		const vk::Extent2D extent,
-		std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts) :
-		device_{ device },
-		renderPass_{ renderPass },
-		extent_{ extent }
+	PointLightSystem::PointLightSystem(const RenderContext& renderContext,
+		const PassContext& passContext) :
+		device_{ renderContext.device },
+		renderPass_{ passContext.renderPass }
 	{
-		vertexShader_ = std::make_unique<de::Shader>(device_, "Shaders/bin/point_light.vert.spv");
-		fragmentShader_ = std::make_unique<de::Shader>(device_, "Shaders/bin/point_light.frag.spv");
+		vertexShader_ = std::make_unique<de::Shader>(*device_, "Shaders/bin/point_light.vert.spv");
+		fragmentShader_ = std::make_unique<de::Shader>(*device_, "Shaders/bin/point_light.frag.spv");
 
-		createPipeline(extent, descriptorSetLayouts);
+		auto layouts = kSlots
+		|std::views::transform([&](auto slot){
+			return renderContext.descriptorLayouts->get(slot);
+		})
+		|std::ranges::to<std::vector>();
+
+		createPipeline(passContext.extent, layouts, renderContext.pipelinesCache);
 	}
 
 	void PointLightSystem::update(GameObject::Map& gameObjects, GlobalUBO& ubo, float deltaTime, float){
@@ -62,7 +67,8 @@ namespace de {
 		frameInfo.commandBuffer.draw(6 * lightCount, 1, 0, 0);
 	}
 
-	void PointLightSystem::createPipeline(const vk::Extent2D extent, std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts) {
+	void PointLightSystem::createPipeline(const vk::Extent2D extent, 
+		std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts, vk::PipelineCache pipelineCache) {
 
 		auto vertexInputState = vk::PipelineVertexInputStateCreateInfo{};	
 		
@@ -101,17 +107,18 @@ namespace de {
 		auto builder = de::GraphicsBuilder()
 			.addFragmentShader("main", fragmentShader_->getShaderModule())
 			.addVertexShader("main", vertexShader_->getShaderModule())
-			.setRenderPass(*renderPass_.getRenderPass())
+			.setRenderPass(*renderPass_->getRenderPass())
 			.setInputAssemblyState(vk::PrimitiveTopology::eTriangleList)
 			.setViewportState(extent)
 			.setRasterizationState(rasterizationState)
 			.setMultisampleState(multisampleInfo)
 			.setDynamicStates(dynamicStates)
+			.setPipelineCache(pipelineCache)
 			.setDsLayouts(descriptorSetLayouts)
 			.setVertexInputState(vertexInputState)
 			.setColorBlendState(colorBlendState)
 			.setDepthStencilState(depthStencil);
 
-		graphicsPipeline_ = std::make_unique<de::GraphicsPipeline>(device_, builder);
+		graphicsPipeline_ = std::make_unique<de::GraphicsPipeline>(*device_, builder);
 	}
 }

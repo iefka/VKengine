@@ -352,20 +352,10 @@ void Application::initSystems(){
 	renderSystem_->setIndirectBuffer(*indirectBuffer_);
 	renderSystem_->setTransformBuffer(*transformBuffer_);
 
-	//pointLights
-	std::vector<vk::DescriptorSetLayout> pointLightSystemLayout{
-		descriptorLayouts_.at("ubo").getLayout()
-	};
-	pointLightSystem_ = std::make_unique<de::PointLightSystem>(
-		*device_, renderer_->getMainRenderPass(), window_.getExtent(), pointLightSystemLayout
-	);
+	pointLightSystem_ = std::make_unique<de::PointLightSystem>(renderContext_, passContext_);
 
-	//skybox
-	std::vector<vk::DescriptorSetLayout> skyboxSystemLayout{
-		descriptorLayouts_.at("ubo").getLayout()
-	};
 	skyboxSystem_ = std::make_unique<de::SkyBoxSystem>(
-		*device_, renderer_->getMainRenderPass(), window_.getExtent(), skyboxSystemLayout,
+		renderContext_, passContext_,
 		*globalPool_, "Materials/Textures/Cubemap_Sky_01.png"
 	);
 }

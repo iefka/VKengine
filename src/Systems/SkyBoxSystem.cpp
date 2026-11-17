@@ -1,47 +1,51 @@
+#include "SkyBoxSystem.hpp"
 #include"DE_Descriptors.hpp"
 #include"DE_Device.hpp"
 #include"DE_RenderPass.hpp"
 #include"DE_FrameData.hpp"
 #include"Texture.hpp"
+#include"core/DE_RenderContext.hpp"
+#include"core/DE_PassContext.hpp"
 
-#include "SkyBoxSystem.hpp"
 #include"ranges"
 
 namespace de {
 
 	SkyBoxSystem::~SkyBoxSystem() = default;
-	SkyBoxSystem::SkyBoxSystem(const Device& device,
-		const RenderPass& renderPass,
-		const vk::Extent2D extent,
-		std::vector<vk::DescriptorSetLayout> descriptorSetLayouts,
+	SkyBoxSystem::SkyBoxSystem(const RenderContext& renderContext,
+		const PassContext& passContext,
 		const DescriptorPool& descriptorPool,
 		std::string texturePath)
-		:device_{device},
-		renderPass_{renderPass},
-		extent_{ extent } {
+		:device_{renderContext.device},
+		renderPass_{passContext.renderPass}{
 	
-		sbTexture_ = std::make_unique<Texture>(Texture::loadCubemap(device_,
+		sbTexture_ = std::make_unique<Texture>(Texture::loadCubemap(*device_,
 			texturePath));
 
-		vertexShader_ = std::make_unique<de::Shader>(device_, "Shaders/bin/skybox.vert.spv");
-		fragmentShader_ = std::make_unique<de::Shader>(device_, "Shaders/bin/skybox.frag.spv");
+		vertexShader_ = std::make_unique<de::Shader>(*device_, "Shaders/bin/skybox.vert.spv");
+		fragmentShader_ = std::make_unique<de::Shader>(*device_, "Shaders/bin/skybox.frag.spv");
 
 
 		auto descriptorInfo = sbTexture_->getDescriptorInfo();
 
 		cubemapLayout_ = std::make_unique<DescriptorSetLayout>(
-			DescriptorSetLayout::Builder{ device_ }
+			DescriptorSetLayout::Builder{ *device_ }
 			.addBinding(0, vk::DescriptorType::eCombinedImageSampler, vk::ShaderStageFlagBits::eFragment)
 			.build()
 		);
 
 		// later somehow need to rewrite this hardcoded dsLayout[1]
-		cubemapDescriptor_ = DescriptorWriter{ device, descriptorPool, *cubemapLayout_}
+		cubemapDescriptor_ = DescriptorWriter{ *device_, descriptorPool, *cubemapLayout_}
 			.writeImage(0, &descriptorInfo)
 			.build();
 
-		descriptorSetLayouts.push_back(cubemapLayout_->getLayout());
-		createPipeline(extent_, descriptorSetLayouts);
+		auto layouts = kSlots
+		|std::views::transform([&](auto slot){
+			return renderContext.descriptorLayouts->get(slot);
+		})|std::ranges::to<std::vector>();
+		layouts.push_back(cubemapLayout_->getLayout());
+
+		createPipeline(passContext.extent, layouts, renderContext.pipelinesCache);
 
 	}
 
@@ -56,7 +60,7 @@ namespace de {
 	}
 
 	void SkyBoxSystem::createPipeline(const vk::Extent2D extent,
-		std::vector<vk::DescriptorSetLayout>&descriptorSetLayouts){
+		std::vector<vk::DescriptorSetLayout>&descriptorSetLayouts, vk::PipelineCache cahce){
 
 		auto vertexInputState = vk::PipelineVertexInputStateCreateInfo{};
 
@@ -94,18 +98,19 @@ namespace de {
 		auto builder = de::GraphicsBuilder()
 			.addFragmentShader("main", fragmentShader_->getShaderModule())
 			.addVertexShader("main", vertexShader_->getShaderModule())
-			.setRenderPass(*renderPass_.getRenderPass())
+			.setRenderPass(*renderPass_->getRenderPass())
 			.setInputAssemblyState(vk::PrimitiveTopology::eTriangleList)
 			.setViewportState(extent)
 			.setRasterizationState(rasterizationState)
 			.setMultisampleState(multisampleInfo)
 			.setDynamicStates(dynamicStates)
+			.setPipelineCache(cahce)
 			.setDsLayouts(descriptorSetLayouts)
 			.setVertexInputState(vertexInputState)
 			.setColorBlendState(colorBlendState)
 			.setDepthStencilState(depthStencil);
 
-		graphicsPipeline_ = std::make_unique<de::GraphicsPipeline>(device_, builder);
+		graphicsPipeline_ = std::make_unique<de::GraphicsPipeline>(*device_, builder);
 		}
 	
 }

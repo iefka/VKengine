@@ -1,9 +1,7 @@
 #ifndef _DE_MEMORY_
 #define _DE_MEMORY_
 
-
 #include<vulkan/vulkan.hpp>
-
 
 namespace de{
 	class Device;

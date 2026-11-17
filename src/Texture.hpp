@@ -10,6 +10,8 @@
 #include<vulkan/vulkan.hpp>
 
 #include"DE_ITextureSource.hpp"
+#include<span>
+#include<cstddef>
 
 namespace de {
 
@@ -27,7 +29,7 @@ namespace de {
 			bool enableAnisotropy = true,
 			vk::ImageType imgType = vk::ImageType::e2D);
 		Texture(const Device& device, vk::Format textureFormat,
-			void* data, uint32_t width, uint32_t height,
+			std::span<std::byte> data, uint32_t width, uint32_t height,
 			vk::SamplerAddressMode addressMode = vk::SamplerAddressMode::eClampToEdge,
 			bool enableAnisotropy = true,
 			vk::ImageType imgType = vk::ImageType::e2D);
