@@ -23,6 +23,8 @@
 #include"DE_MainRenderPass.hpp"
 #include"DE_Gui.hpp"
 #include"DE_GeometryPool.hpp"
+#include"core/DE_PassContext.hpp"
+#include"core/DE_RenderContext.hpp"
 
 
 #include <vector>
@@ -118,6 +120,9 @@ private:
 
 	std::unique_ptr<de::CommandPool> commandPool_;         
 	std::unique_ptr<de::Renderer> renderer_;               
+
+	de::RenderContext renderContext_;
+    de::PassContext passContext_;           
 
 	std::unique_ptr<de::ComputeTextureTarget> computeTexture_;
 	std::unique_ptr<de::RuntimeComputeGeometry> computeGeometry_;

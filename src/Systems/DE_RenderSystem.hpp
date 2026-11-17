@@ -56,7 +56,8 @@ namespace de {
 
 		void renderGameObjects(const FrameInfo& frameInfo);
 	private:
-		void createPipeline(const vk::Extent2D extent, const std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts);
+		void createPipeline(const vk::Extent2D extent, const std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts,
+			 const vk::PipelineCache& cache);
 		
 		const Device* device_;
 		const RenderPass* renderPass_;

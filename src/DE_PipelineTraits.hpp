@@ -32,16 +32,23 @@ namespace de{
                 pushConstantRanges_ = ranges;
                 return *this;
             }
+            Builder& setCache(vk::PipelineCache cache)noexcept{
+                cache_ = cache;
+                return *this;
+            }
 
             // geters
+
             const std::vector<vk::DescriptorSetLayout>& getDsLayouts() const noexcept { return dsLayouts_; }
             const std::vector<vk::PushConstantRange>& getPushConstantRanges() const noexcept { return pushConstantRanges_; }
             const vk::PipelineShaderStageCreateInfo& getShaderStage() const noexcept{ return shaderStage_; }
+            const vk::PipelineCache getCache() const noexcept {return cache_;}
 
         private:
             std::vector<vk::DescriptorSetLayout> dsLayouts_;
             std::vector<vk::PushConstantRange> pushConstantRanges_;
             vk::PipelineShaderStageCreateInfo shaderStage_;
+            vk::PipelineCache cache_{};
         };
 
         static vk::UniquePipeline create(const vk::Device& device,
@@ -51,7 +58,7 @@ namespace de{
                 .setLayout(layout)
                 .setStage(builder.getShaderStage());
 
-            auto [result, pipeline] = device.createComputePipelineUnique(vk::PipelineCache{}, computePipelineInfo);
+            auto [result, pipeline] = device.createComputePipelineUnique(builder.getCache(), computePipelineInfo);
             if (result != vk::Result::eSuccess) {
                 throw std::runtime_error("Failed to create compute pipeline");
             }
@@ -183,6 +190,10 @@ namespace de{
                 pushConstantRanges_.push_back(range);
                 return *this;
             }
+            Builder& setPipelineCache(vk::PipelineCache cache) noexcept {
+                cache_ = cache;
+                return *this;
+            }
 
            const std::vector<vk::PipelineShaderStageCreateInfo>& getStageInfos()const noexcept          {return stageInfos_;}
            const vk::PipelineVertexInputStateCreateInfo*         getInputStateInfo() const noexcept     {return &inputStateCreateInfo_;}
@@ -196,7 +207,7 @@ namespace de{
            const std::vector<vk::PushConstantRange>&             getPushConstantRanges() const noexcept {return pushConstantRanges_; }
            const vk::PipelineDepthStencilStateCreateInfo*        getDepthInfo() const noexcept          {return &detphState_;}
            const vk::PipelineDynamicStateCreateInfo*             getDynamicState() const noexcept       { return &dynamicState; }
-           
+           const vk::PipelineCache                               getCache() const noexcept              {return cache_;}
 
         private:
             std::vector<vk::PipelineShaderStageCreateInfo> stageInfos_;
@@ -215,6 +226,7 @@ namespace de{
             vk::Rect2D scissors_{};
             std::vector<vk::DescriptorSetLayout> dsLayouts_;
             std::vector<vk::PushConstantRange> pushConstantRanges_;
+            vk::PipelineCache cache_;
 
             
         };
@@ -238,7 +250,7 @@ namespace de{
       
 
 
-            auto [result, pipeline] = device.createGraphicsPipelineUnique(vk::PipelineCache{}, graphicsPipelineInfo);
+            auto [result, pipeline] = device.createGraphicsPipelineUnique(builder.getCache(), graphicsPipelineInfo);
             if (result != vk::Result::eSuccess) {
                 throw std::runtime_error("Failed to create graphics pipeline");
             }

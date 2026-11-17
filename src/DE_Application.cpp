@@ -14,8 +14,7 @@
 #include "Utility/DE_Utility.hpp"
 #include "Material.hpp"
 #include "DE_MaterialData.hpp"
-#include"core/DE_PassContext.hpp"
-#include"core/DE_RenderContext.hpp"
+
 
 #include"third_party/imgui/imgui.h"
 #include"third_party/imgui/backends/imgui_impl_vulkan.h"
@@ -147,7 +146,7 @@ void Application::preparePasses(){
 
 	guiPass_ = std::make_unique<de::GUIRenderPass>(
 		*instance_,
-		*device_,
+		renderContext_,
 		window_,
 		*renderer_
 	);
@@ -332,20 +331,20 @@ void Application::initSystems(){
 	layoutCache_->ensure(de::SetSlot::eMaterialData, materialBuffer_->getDescriptorLayout().getLayout());
 	layoutCache_->ensure(de::SetSlot::eTransforms,    transformBuffer_->getDescriptorLayout().getLayout());
 
-	de::RenderContext renderContext{
+	renderContext_ = {
 		.device = device_.get(),
 		.descriptorLayouts = layoutCache_.get(),
 		.descriptors = nullptr,
-		.pipelinesCache = pipelineCache_.get()
+		.pipelinesCache = pipelineCache_->getCache()
 	};
 
-	de::PassContext passContext{
+	passContext_ = {
 		.renderPass = renderer_->getMainRenderPassPtr(),
 		.extent = window_.getExtent()
 
 	};
 
-	renderSystem_ = std::make_unique<de::RenderSystem>(renderContext, passContext);
+	renderSystem_ = std::make_unique<de::RenderSystem>(renderContext_, passContext_);
 	renderSystem_->setGeometryPool(*geometryPool);
 	renderSystem_->setDefaultMaterial(materialManager_->getDefaultMaterial());
 	renderSystem_->setMaterialDescriptorSet(bindlessRegistry_->getDescriptorSet());

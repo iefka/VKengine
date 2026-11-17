@@ -12,6 +12,6 @@ namespace de{
         const Device* device;
         const DescriptorSetLayoutCache* descriptorLayouts;
         DescriptorArena* descriptors;
-        const PipelineCache* pipelinesCache;
+        vk::PipelineCache pipelinesCache{};
     };
 }

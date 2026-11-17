@@ -1,3 +1,4 @@
+#include "DE_Gui.hpp"
 #include"DE_Instance.hpp"
 #include"DE_Device.hpp"
 #include"DE_Window.hpp"
@@ -5,8 +6,7 @@
 #include"DE_RenderPass.hpp"
 #include"DE_Renderer.hpp"
 #include"DE_Descriptors.hpp"
-#include "DE_Gui.hpp"
-
+#include"core/DE_RenderContext.hpp"
 
 #include"third_party/imgui/imgui.h"
 #include"third_party/imgui/backends/imgui_impl_vulkan.h"
@@ -28,7 +28,7 @@ namespace de {
 
 	GUIRenderPass::GUIRenderPass(
 		const Instance& instance,
-		const Device& device,
+		const RenderContext& renderContext,
 		Window& window,
 		const Renderer& renderer)
 	:renderer_{renderer}{
@@ -37,7 +37,7 @@ namespace de {
 		ImGui::CreateContext();
 		IMGUI_CHECKVERSION();
 		renderPass_ = std::make_unique<RenderPass>(
-			RenderPass::Builder{ device }
+			RenderPass::Builder{ *renderContext.device }
 			.setColorAttachment(
 				window.getSurfaceFormat().format,
 				vk::SampleCountFlagBits::e1,
@@ -58,7 +58,7 @@ namespace de {
 		renderTarget_.rebind(renderer_.getSwapchain(), *this);
 
 		imguiPool_ = std::make_unique<DescriptorPool>(
-			DescriptorPool::Builder{ device }
+			DescriptorPool::Builder{ *renderContext.device }
 			.setMaxSets(1000)
 			.addPoolSize(vk::DescriptorType::eSampledImage, 500)
 			.addPoolSize(vk::DescriptorType::eSampler, 500)
@@ -72,15 +72,15 @@ namespace de {
 		ImGui_ImplVulkan_InitInfo initInfo{
 			.ApiVersion = vk::makeApiVersion(0,1,4,0),
 			.Instance = instance.getInstance(),
-			.PhysicalDevice = device.getPhysicalDevice(),
-			.Device = device.getLogicalDevice(),
-			.QueueFamily = device.getGraphicsQueue().queuFamilyIndex,
-			.Queue = device.getGraphicsQueue().queue,
+			.PhysicalDevice = renderContext.device->getPhysicalDevice(),
+			.Device = renderContext.device->getLogicalDevice(),
+			.QueueFamily = renderContext.device->getGraphicsQueue().queuFamilyIndex,
+			.Queue = renderContext.device->getGraphicsQueue().queue,
 			.DescriptorPool = imguiPool_->getPool(),
 			.DescriptorPoolSize = 0,               
 			.MinImageCount = renderer_.getSwapchain().getMinImageCount(),
 			.ImageCount = renderer_.getSwapchain().getImageCount(),
-			.PipelineCache = nullptr,
+			.PipelineCache = renderContext.pipelinesCache,
 			.PipelineInfoMain = {
 				.RenderPass = *renderPass_->getRenderPass(),
 				.Subpass = 0,

@@ -32,7 +32,7 @@ namespace de {
 		})
 		|std::ranges::to<std::vector>();
 
-		createPipeline(passContext.extent, layouts);
+		createPipeline(passContext.extent, layouts, renderContext.pipelinesCache);
 
 	}
 
@@ -110,7 +110,8 @@ namespace de {
 
 	}
 
-	void RenderSystem::createPipeline(const vk::Extent2D extent, const std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts) {
+	void RenderSystem::createPipeline(const vk::Extent2D extent, const std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts,
+	 const	vk::PipelineCache& cache) {
 
 		const auto& vertexAttributes = de::Mesh::Vertex::getAttributes();
 		const auto& bindingDescription = de::Mesh::Vertex::getBindings();
@@ -159,6 +160,7 @@ namespace de {
 			.setRasterizationState(rasterizationState)
 			.setMultisampleState(multisampleInfo)
 			.setDynamicStates(dynamicStates)
+			.setPipelineCache(cache)
 			.setDsLayouts(descriptorSetLayouts)
 			.setVertexInputState(vertexInputState)
 			.setColorBlendState(colorBlendState)

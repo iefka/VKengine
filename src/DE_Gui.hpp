@@ -15,6 +15,7 @@ namespace de {
 	class RenderPass;
 	class Window;
 	class GUIRenderPass;
+	struct RenderContext;
 	
 	
 	class GUIRenderTarget : public RenderTarget {
@@ -40,7 +41,7 @@ namespace de {
 
 		 GUIRenderPass(
 			 const Instance& instance,
-			 const Device& device,
+			 const RenderContext& renderContext,
 			 Window& window,
 			 const Renderer& renderer);
 		 ~GUIRenderPass();
