@@ -237,6 +237,9 @@ namespace de{
 		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingStorageBufferUpdateAfterBind == false) {
 			throw std::runtime_error("descriptorBindingStorageBufferUpdateAfterBind feature is not suported");
 		}
+		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan12Features>().scalarBlockLayout == false) {
+			throw std::runtime_error("scalarBlockLayout feature is not suported");
+		}
 		if (featuresChainCheck.get<vk::PhysicalDeviceFeatures2>().features.drawIndirectFirstInstance == false) {
 			throw std::runtime_error(
 				"drawIndirectFirstInstance feature is not supported");
@@ -252,6 +255,7 @@ namespace de{
 		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingVariableDescriptorCount = vk::True;
 		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingSampledImageUpdateAfterBind = vk::True;
 		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingStorageBufferUpdateAfterBind = vk::True;
+		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().scalarBlockLayout = vk::True;
 
 
 		const auto deviceCreateInfo = vk::DeviceCreateInfo{}

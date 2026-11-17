@@ -55,7 +55,6 @@ namespace de{
             uint32_t p1, p2;
             uint32_t q1, q2;
             float morph;
-            float _padding[4];
         }ubo;
 
         std::deque<std::pair<uint32_t,uint32_t>> morphQueue{{5,8},{5,8}};

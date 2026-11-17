@@ -1,5 +1,5 @@
 #version 450
-
+#extension GL_EXT_scalar_block_layout : require
 //in
 layout(location = 0) in vec4 inPosition;
 layout(location = 1) in vec4 inColor;
@@ -36,7 +36,7 @@ layout(std140, set = 0, binding = 0) uniform GlobalUbo{
     int numLights;
 } ubo;
 
-layout(std430,set = 3, binding = 0) readonly buffer TransformBuffer{
+layout(scalar, set = 3, binding = 0) readonly buffer TransformBuffer{
     GPUTransformData transforms[];
 } transformBuffer;
 
