@@ -10,7 +10,7 @@
 #include"DE_Shaders.hpp"
 #include"DE_GameObject.hpp"
 #include"core/DE_SetSlot.hpp"
-#include"core/DE_DescriptorSetLayoutCache.hpp"
+#include"core/DE_SlotUtils.hpp"
 #include<utility>
 #include <span>
 

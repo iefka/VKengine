@@ -60,7 +60,7 @@ namespace de {
 	}
 
 	void SkyBoxSystem::createPipeline(const vk::Extent2D extent,
-		std::span<const vk::DescriptorSetLayout> descriptorSetLayouts, vk::PipelineCache cachce){
+		std::span<const vk::DescriptorSetLayout> descriptorSetLayouts, vk::PipelineCache cache){
 
 		auto vertexInputState = vk::PipelineVertexInputStateCreateInfo{};
 
@@ -104,7 +104,7 @@ namespace de {
 			.setRasterizationState(rasterizationState)
 			.setMultisampleState(multisampleInfo)
 			.setDynamicStates(dynamicStates)
-			.setPipelineCache(cachce)
+			.setPipelineCache(cache)
 			.setDsLayouts(descriptorSetLayouts)
 			.setVertexInputState(vertexInputState)
 			.setColorBlendState(colorBlendState)

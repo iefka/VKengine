@@ -8,6 +8,8 @@
 #include"DE_FrameData.hpp"
 
 #include<ranges>
+#include<utility>
+#include<array>
 
 namespace de {
 
