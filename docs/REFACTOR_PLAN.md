@@ -33,6 +33,61 @@ find /clang64 -name "libc++.modules.json" -o -name "std.cppm" 2>/dev/null
 
 ---
 
+## Статус (обновлено 2026-11-09, `main` @ `14fa095`)
+
+**Фаза 0 закрыта, фаза 1 закрыта.** Ниже — фактическое состояние, включая отклонения от
+первоначального плана: часть решений в процессе оказалась другой (и лучше), часть сознательно
+перенесена, часть не сделана и вынесена в отдельный список хвостов.
+
+### Что сделано и как именно
+
+| Пункт плана | Фактическая реализация | Отличие от плана |
+|---|---|---|
+| 0: `.gitignore`, пресеты, флаги, `baseline.md` | `.editorconfig`, `CMakePresets.json`, `docs/baseline.md` (время сборки + fps) | `.clang-format` **отвергнут** (свой формат); CI и тесты не заводились; в baseline нет времени старта, счётчика `queue.submit` и CPU-времени кадра |
+| 1.1 `RenderContext` | device-scoped: `const Device*`, `descriptorLayouts`, `descriptors`, `pipelinesCache` (`vk::PipelineCache`) | `extent`/`samples` **вынесены** в `PassContext` — они swapchain-scoped и меняются на ресайзе; `pipelinesCache` — handle, а не указатель на обёртку |
+| 1.2 `SetSlot` + `bindSet` | `SetSlot` — словарь из 4 имён; `bindSets(cmd, layout, std::span<vk::DescriptorSet>)` **позиционный**, без индекса; `bindSet` удалён | индекс сета — свойство конкретного pipeline layout, а не глобальное понятие; литерал `0` в биндингах не остался |
+| 1.2 списки слотов | `kSlots` только там, где сетов больше одного: `RenderSystem` (4), `SkyBoxSystem` (1 общий + 1 приватный через локальный `SkyBoxSlots`); `static_assert(areConsecutiveFromZero(kSlots))` | от «списка из одного элемента» и от локальных enum'ов у односетовых систем отказались — это был лишний механизм |
+| 1.3 `DescriptorSetLayoutCache` | header-only, ключ `uint32_t`, концепт `Uint32EnumClass`, `ensure()` идемпотентный («тот же слот ⇒ тот же layout») | хеширование списка биндингов как ключ **отвергнуто**; кэш не владеет layout'ами и не знает про `SetSlot` |
+| 1.3 `DescriptorArena` | класс написан (пул на кадр, `allocate`/`reset`, `DE_ASSERT` на индекс) | **не подключён**: `RenderContext::descriptors = nullptr`, все 7 `DescriptorPool` на месте — переезд по одному владельцу в фазах 2–4 |
+| 1.4 `std::span` вместо `void*` | `GeometryPool::upload`, `Texture{..., std::span<std::byte> data, ...}` | `Buffer::copyToBuffer(const void*)` остался — см. хвосты |
+| 1.5 `common.glsl` | `Shaders/general/common.glsl` (`GlobalUbo`, `PointLight`, `lights[10]`), подключён в 5 шейдеров; `MAX_LIGHTS` из `DE_FrameData.hpp` убран | `glslc` без `-I`, `DEPENDS` без `common.glsl` — см. хвосты |
+| 1.6 `static_assert` на `GlobalUBO` | **не сделано** | старые assert'ы удалены вместе с `_padding`, обратно не добавлены; числа изменились (см. хвосты) |
+| 1.7 `layout(scalar)` | проверка фичи + включение в `Device::createLogicalDevice`; `layout(scalar, set=…)` в `GlobalUbo`/`MeshBuffer`/`TransformBuffer`; `_padding` из C++-структур вычищены | — |
+| 3.2 `vk::PipelineCache` | **сделано раньше срока**: класс + `Builder::setCache`, все системы передают кэш, `initInfo.PipelineCache` у imgui | эффект пока не измерен (нет счётчиков и `PipelineCreationFeedback`) |
+| 2.2 скретч-буферы | **сделано раньше срока**: `transforms_`/`indirectCommands_` — члены `RenderSystem` | — |
+| 0.3 `totalTime_` | сделано | — |
+
+### Хвосты фазы 1 (6 правок, каждая < 30 мин)
+
+1. **`static_assert` на раскладку** `GlobalUBO`/`pointLight` под scalar: `pointLight` = 36,
+   `pointLights` на смещении 272, `numLights` на 632, `GlobalUBO` = 636 — при условии, что в
+   `glm_config.hpp` не задан `GLM_FORCE_DEFAULT_ALIGNED_GENTYPES`. Ровно этот assert и поймает,
+   если условие нарушится.
+2. **`glslc`: `-I` и `DEPENDS`.** Сейчас `COMMAND glslc "${SHADER_FILE}"` и
+   `DEPENDS "${SHADER_FILE}"`: `common.glsl` резолвится относительно каталога шейдера (работает
+   случайно), а правка общего заголовка **не пересобирает ни один шейдер** — молча, без ошибки.
+3. **`Buffer::copyToBuffer(std::span<const std::byte>, vk::DeviceSize offset = 0)`** вместо `void*`
+   (шаблонный overload для контейнеров остаётся сахаром).
+4. **Литералы `0` в биндингах compute-пассов** (`DE_ShaderTexturingPass.cpp:97`,
+   `DE_RuntimeComputeGeometry.cpp:154`) → `bindSets` с массивом из одного сета.
+5. **Вынести `Uint32EnumClass` + `areConsecutiveFromZero`** из `DE_DescriptorSetLayoutCache.hpp`
+   в `core/DE_SlotUtils.hpp`: сейчас `RenderSystem.hpp` и `SkyBoxSystem.hpp` включают
+   `unordered_map` + `DE_Descriptors.hpp` ради одной `consteval`-функции.
+6. **Убрать из кэша `DE_Descriptors.hpp`**, дописать недостающие `<array>`/`<cstddef>`/`<cstdint>`
+   (сейчас `std::array` в подписи живёт на транзитивных инклюдах `vulkan.hpp`).
+
+### Что нужно снять до старта фазы 2
+
+DoD фазы 2 («≥30% CPU, один submit») без этих чисел непроверяем, а `baseline.md` их не содержит:
+
+| Метрика | Как |
+|---|---|
+| Число `queue.submit` + `waitIdle` на старте | счётчик в `Device::endSingleCommand` под `#ifdef DE_COUNTERS` |
+| Время от `main()` до первого кадра | `steady_clock` вокруг `initResources()`, холодный кэш пайплайнов и тёплый |
+| CPU-время кадра | замер `renderFrame()` целиком, p50/p95 по 1000 кадрам |
+
+---
+
 ## Старт: первые три дня, по коммитам
 
 Порядок отличается от нумерации фаз намеренно: сначала то, что нельзя сделать потом без потерь
@@ -236,121 +291,159 @@ endif()
 
 ---
 
-### Фаза 1 — Контракты между классами (3–5 дней)
+### Фаза 1 — Контракты между классами ✅ сделано
 
-**Цель:** убрать неявные договорённости (номера сетов, порядок layout'ов, магические константы).
+**Цель (достигнута):** убрать неявные договорённости — номера сетов, порядок layout'ов,
+магические константы — и разделить device-scoped и pass-scoped состояние.
 
-1. **`RenderContext`** (`src/core/DE_RenderContext.hpp`):
+**Итоговая форма — это и есть договорённость, на которую опираются следующие фазы:**
+
+1. **Два контекста, а не один.**
    ```cpp
-   struct RenderContext {
-       Device* device;
-       vk::Extent2D extent;              // swapchain
-       vk::SampleCountFlagBits samples;
-       const DescriptorSetLayoutCache* layouts;
-       DescriptorArena* descriptors;     // см. п.3
-       const PipelineCache* pipelines;   // vk::PipelineCache + хелперы
+   struct RenderContext {                  // device-scoped, создаётся один раз
+       const Device* device;
+       const DescriptorSetLayoutCache* descriptorLayouts;
+       DescriptorArena* descriptors;       // пока nullptr, см. фазу 2–4
+       vk::PipelineCache pipelinesCache{}; // null = создавать пайплайны без кэша
+   };
+
+   struct PassContext {                    // pass-scoped, меняется на ресайзе
+       const RenderPass* renderPass;
+       vk::Framebuffer frameBuffer{};
+       vk::Extent2D extent;
+       vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1;
    };
    ```
-   Все системы принимают `const RenderContext&` вместо `(device, renderPass, extent, layouts...)`.
-   Это же чинит вторую проблему: `const Device&` в конструкторе делает класс непересоздаваемым —
-   заменяем на указатель в контексте.
-2. **Именованные слоты дескрипторов**:
-   ```cpp
-   enum class SetSlot : uint32_t { eGlobal = 0, eTextures, eMaterialData, eTransforms };
-   void bindSet(vk::CommandBuffer, vk::PipelineLayout, SetSlot, vk::DescriptorSet);
-   ```
-   В `RenderSystem` исчезают 1/2/3, в `SkyBoxSystem` — просьба «переписать hardcoded dsLayout[1]».
-3. **`DescriptorSetLayoutCache`** (key — хеш списка биндингов) и **`DescriptorArena`**
-   (свой пул на кадр + `reset()`); убрать 5 независимых `DescriptorPool` из систем.
-4. **`std::span` и типы вместо `void*`:**
-   `Buffer::copyToBuffer(std::span<const std::byte>)`, `Texture{..., std::span<const std::byte> data, vk::Extent2D}`,
-   `GeometryPool::upload(std::span<const Mesh::Vertex>, std::span<const uint32_t>)`.
-5. **Один `.glsl`-include** для общих структур: `Shaders/include/common.glsl` с `GlobalUbo`,
-   `PointLight`, `MAX_LIGHTS`. Подключение: `glslc -I ${SHADER_SOURCE_DIR}/include`. Убирает 6 копий
-   и `#define MAX_LIGHTS 10` из `DE_FrameData.hpp`.
-6. **`static_assert` на layout** `GlobalUBO` (как уже сделано для `GPUMaterialData`):
-   `offsetof` каждого поля + `sizeof`, рядом — комментарий с ожидаемым std140-смещением.
-   Позже (фаза 5) это станет автогенерацией.
-7. **Решение по `layout(scalar)`**: `scalarBlockLayout` — **core-фича Vulkan 1.2**
-   (`vk::PhysicalDeviceVulkan12Features::scalarBlockLayout`), то есть расширение
-   `VK_EXT_scalar_block_layout` тебе не нужно: включается одной строкой в уже существующей
-   цепочке features в `Device::createLogicalDevice`. Переписать UBO/SSBO-структуры шейдеров на
-   `layout(scalar)`. Это открывает дорогу к автогенерации раскладки из C++
-   (см. §5): `vec3` = 12 байт без паддинга, glm-структуры совпадают буквально.
+   Правило: контекст **передаётся вниз** в конструктор, а не хранится ссылкой/указателем
+   (указатель на чужую локальную переменную — висячая ссылка на первом же рефакторе).
+   `extent` допустим как параметр конструктора (статические viewport/scissor), но на кадре
+   читается из `PassContext`, а не из поля системы.
 
-**DoD:** в `RenderSystem`/`SkyBoxSystem`/`MainRenderPass` нет литералов 0..3; одинаковые layout'ы
-не дублируются; `GlobalUBO` защищён `static_assert`; шейдеры включают общий заголовок.
-**Риск:** средний (перебор layout'ов ломает биндинги) — делать под RenderDoc/валидацией.
+2. **Слоты.** `SetSlot` — словарь имён **общих** layout'ов (`eGlobal`, `eTextures`,
+   `eMaterialData`, `eTransforms`), а не индекс биндинга. Биндинг позиционный:
+   `bindSets(cmd, pipelineLayout, std::span<const vk::DescriptorSet>)`, всегда с индекса 0.
+   Список `kSlots` заводится только если сетов больше одного **и** он используется в двух местах
+   (создание layout'ов и биндинг) — сейчас это `RenderSystem` и `SkyBoxSystem`, и там же стоит
+   `static_assert(areConsecutiveFromZero(kSlots))`.
+
+3. **Кэш layout'ов.** `DescriptorSetLayoutCache`: `ensure(slot, layout)` — идемпотентный
+   («тот же слот ⇒ тот же layout», `DE_ASSERT` на конфликт) и `get(slot)`. Ключ — любой scoped
+   enum с `uint32_t` (концепт `Uint32EnumClass`), хранение — `unordered_map<uint32_t, …>`.
+   Кэш **не владеет** layout'ами и не знает про `SetSlot`. Приватные layout'ы систем (cubemap
+   у skybox, SSBO у compute) в кэш не попадают: их числовые ключи столкнулись бы с общими.
+
+4. **Ошибки.** `core/DE_Assert.hpp`: `DE_ASSERT` — Debug `assert`, Release
+   `throw std::logic_error` с текстом условия и файлом. Два правила: не использовать в
+   деструкторах и `noexcept`-функциях (Release-ветка там = `std::terminate`), и не использовать
+   в горячих циклах — в Release условие всё ещё вычисляется.
+
+5. **Шейдеры.** `Shaders/general/common.glsl` (общие структуры) + `layout(scalar)` в UBO/SSBO;
+   `scalarBlockLayout` проверяется и включается в `Device::createLogicalDevice`. Паддинги
+   `float _padding[3]` из C++-структур удалены — раскладка теперь совпадает с GLSL буквально.
+
+**DoD:** в биндингах нет номеров сетов; все создания пайплайнов идут через `vk::PipelineCache`
+(`git grep "vk::PipelineCache{}"` → пусто); одинаковые layout'ы не дублируются; шейдеры включают
+общий заголовок; `GlobalUBO` защищён `static_assert` (пока нет — см. хвосты).
+
+**Осталось:** шесть пунктов из «Хвостов фазы 1» выше. Ни один не блокирует фазу 2.
+
+**Риск (по факту):** реализованный перебор layout'ов ломал биндинги дважды — двойной биндинг сета
+с null в `sets[]` и рассинхрон «layout на 4 сета / биндим 5». Оба ловятся `DE_ASSERT` +
+валидацией, но не глазами; отсюда и требование к `static_assert` на списках слотов.
 
 ---
 
 ### Фаза 2 — Кадр: данные сцены и compute (4–6 дней)
 
-**Цель:** CPU больше не делает O(N) работы каждым кадром безусловно.
+**Цель:** CPU перестаёт делать O(N) работы каждым кадром безусловно, а старт — перестать быть
+сотней последовательных submit'ов с `waitIdle`.
 
-1. **`Scene`** (`src/scene/DE_Scene.hpp`):
-   - `std::vector<GameObject>` + `std::unordered_map<uint32_t, uint32_t> idToIndex`;
-   - стабильный порядок объектов между запусками;
-   - метод `buildDrawList()` → сортировка по `(pipelineKey, materialIndex)`, кэшируется до
-     изменения сцены (dirty-флаг).
-2. **Скретч-буферы вместо аллокаций в кадре**: `std::vector<GPUTransformData>` и
-   `std::vector<vk::DrawIndexedIndirectCommand>` — члены `RenderSystem`, `clear()` вместо пересоздания
-   (сейчас 2 аллокации в кадр, `DE_RenderSystem.cpp:60`).
-3. **Dirty-механизм для compute**: `IComputeStep` получает `invalidate()`/`isDirty()`;
+Порядок ниже выбран по «выгода / риск», а не по номерам первоначального плана.
+
+0. **Снять три числа** из таблицы «Что нужно снять до старта фазы 2» (счётчик submit'ов, время до
+   первого кадра, CPU-время кадра). Без них DoD ниже непроверяем.
+
+1. **`UploadContext`** (`src/gpu/DE_UploadContext.hpp`) — первый и самый выгодный шаг.
+   Сейчас `Device::endSingleCommand` делает `submit` + `queue.waitIdle()` на **каждую** операцию:
+   `MaterialBuffer::upload` — на каждый материал (плюс локальный staging-буфер и его пул),
+   `Texture` — 2–3 на текстуру (staging + мипы), по одному в четырёх местах `GeometryPool`,
+   в `Mesh`, в `MaterialBuffer::grow`.
+   Форма: один `vk::CommandBuffer` и один fence на батч; persistent-mapped staging с линейным
+   аллокатором; `cmd()` для ручных записей (мипы, барьеры); `flush()` = end + submit + wait.
+   **Не в `Device`** — устройство остаётся обёрткой, батчинг это слой выше.
+   Ловушки, проверенные на текущем коде:
+   - staging обязан жить до сигнала fence → член контекста, а не локальная переменная
+     (сейчас в `MaterialBuffer::upload` это работает только из-за `waitIdle` внутри);
+   - `MaterialBuffer::grow` внутри батча: новый буфер + отложенное удаление старого после fence;
+   - один `vkCmdPipelineBarrier` перед `flush()` (transfer → shader read, layout'ы образов):
+     сейчас барьеров нет вовсе, и это держится на `waitIdle` + порядке сабмитов;
+   - контекст не вставляет барьеры между командами пользователя: порядок внутри батча значим
+     (мипы зависят от предыдущего blit'а).
+
+2. **Dirty-механизм для compute**: `IComputeStep` получает `invalidate()`/`isDirty()`;
    `ComputeTextureTarget` (2048²!) и `RuntimeComputeGeometry` диспатчатся только при изменении
-   параметров. `Renderer` пропускает чистые шаги и **не ставит барьеры**, если диспатча не было.
-4. **`UploadContext`** (`src/gpu/DE_UploadContext.hpp`): staging-арена (persistent mapped, растущая),
-   запись всех копий в один command buffer, один submit, один fence.
-   Перевести на него: `Texture` (сейчас 2–3 submit'а на текстуру), `MaterialBuffer::upload`
-   (сейчас **submit + waitIdle на каждый материал**), `GeometryPool`, `MaterialBuffer::grow`.
-5. **Сцена как данные** (опционально, но сильно упрощает `Application`):
-   перенести 200 строк из `initGameObjects` в `scenes/demo.scene` (простой текстовый формат) +
-   `SceneLoader`. Позволит менять сцену без пересборки.
-6. **`framesInFlight`**: измерить 2 против 3, зафиксировать в конфиге.
+   параметров; `Renderer` пропускает чистые шаги **вместе с их барьерами**.
 
-**DoD:** CPU-время кадра на `assets/HWY_Galleri` упало ≥30% от baseline; на старте один
-`vkQueueSubmit` (или <5) вместо сотни; `totalTime_` тикает.
-**Риск:** средний (синхронизация upload'ов) — но всё изолировано в одном классе.
+3. **`Scene`** (`src/scene/DE_Scene.hpp`): `std::vector<GameObject>` + `idToIndex`, стабильный
+   порядок между запусками, `buildDrawList()` с сортировкой по `(pipelineKey, materialIndex)`
+   и dirty-флагом. Самый инвазивный пункт фазы (трогает `GameObject::Map` во всех системах) —
+   делать последним.
+
+4. **Сцена как данные** (опционально): `scenes/demo.scene` + `SceneLoader`, убрать 200 строк из
+   `initGameObjects`, менять сцену без пересборки.
+
+5. **`framesInFlight`**: измерить 2 против 3, зафиксировать в конфиге. Не раньше, чем закрыт п.1.
+
+Скретч-буферы (`transforms_`/`indirectCommands_` как члены `RenderSystem`) — **сделано в фазе 1**,
+из плана вычеркнуто.
+
+**DoD:** на старте единицы `vkQueueSubmit` вместо десятков; время до первого кадра упало
+(числа из п.0); CPU-время кадра на `assets/HWY_Galleri` −≥30% от baseline.
+**Риск:** средний — синхронизация upload'ов, но всё изолировано в одном классе.
+**Не делать в этой фазе:** не смешивать с правками fences/semaphores кадра. Upload-путь живёт
+вне кадра; смешение даёт неповторяющиеся артефакты и неделю отладки.
 
 ---
 
-### Фаза 3 — Проходы: dynamic rendering + кэш пайплайнов (5–8 дней)
+### Фаза 3 — Проходы: dynamic rendering + барьеры (5–8 дней)
 
-**Цель:** убрать `VkRenderPass` из конструкторов систем; открыть дорогу второму проходу (IBL-фон,
-пре-пасс, MSAA, деферред) без пересоздания пайплайнов.
+**Цель:** убрать `VkRenderPass` из конструкторов систем; открыть дорогу второму проходу
+(IBL-фон, пре-пасс, MSAA, деферред) без пересоздания пайплайнов.
 
 1. **Dynamic rendering** (core Vulkan 1.3, `vk::RenderingAttachmentInfo` + `cmd.beginRendering`):
-   - удалить `DE_RenderPass.{hpp,cpp}`, `DE_RenderTarget.hpp`, `onSwapchainRecreation` из `IRenderPass`;
+   - удалить `DE_RenderPass.{hpp,cpp}`, `DE_RenderTarget.hpp`, `onSwapchainRecreation` из
+     `IRenderPass`;
    - `IRenderPass::record(const FrameInfo&, const PassTarget&)`, где `PassTarget` — вектор
-     `RenderingAttachmentInfo` + extent;
+     `RenderingAttachmentInfo` + extent (сегодня эту роль играет `PassContext`);
    - пайплайны создаются с `vk::PipelineRenderingCreateInfo` (форматы + samples), без render pass;
    - `Swapchain` перестаёт держать render pass и framebuffer'ы.
-2. **`vk::PipelineCache`**: один на устройство, сериализация в `pipeline.cache` (проверка
-   `VkPipelineCacheHeaderVersionOne`: vendor/driver/version, при несовпадении — инвалидация).
-   Сейчас `vk::PipelineCache{}` создаётся для каждого пайплайна и не сохраняется, то есть
-   каждый запуск = компиляция шейдеров заново.
-3. **Один API барьеров**: заменить `de::imageBarrier` + `Device::transitionImageLayout` на
-   `de::Barrier`-хелпер на `vk::DependencyInfo`/`vk::ImageMemoryBarrier2`. Ты на Vulkan 1.4,
-   то есть `synchronization2` и `dynamic rendering` — **core**, никаких расширений включать не надо,
-   достаточно поднять `apiVersion` (уже 1.4) и пользоваться `vk::ImageMemoryBarrier2`.
+
+2. **Один API барьеров**: заменить `de::imageBarrier` и `Device::transitionImageLayout` на
+   `de::Barrier`-хелпер на `vk::DependencyInfo`/`vk::ImageMemoryBarrier2`. Ты на Vulkan 1.4, то
+   есть `synchronization2` и dynamic rendering — **core**, достаточно объявленной `apiVersion`.
    (Заодно чинится баг `setLevelCount(1)`, который перетирает `mipLevelCount`.)
-4. **Глубина на кадр, а не на свопчейн** (можно и до dynamic rendering, отдельный маленький PR):
+
+3. **Глубина на кадр, а не на свопчейн** (можно и до dynamic rendering, отдельный маленький PR):
    `DE_Swapchain.cpp:89-94` создаёт **один** depth image/view, общий для всех framebuffer'ов,
    при `framesInFlight = 2`. Консервативная `SUBPASS_EXTERNAL → 0` зависимость
    (`DE_RenderPass.cpp:76-90`), которая сейчас закрывает sync-хазарды, делает это ценой
    сериализации: второй кадр не может писать в depth, пока первый не дошёл до
-   `LATE_FRAGMENT_TESTS`, то есть все преимущества двух кадров в полёте исчезают.
-   Правильно — `framesInFlight` копий depth image (или копия на каждый swapchain image) и
-   узкие зависимости. С dynamic rendering это превращается в два читаемых барьера на кадр.
-4. **Мини-рендер-граф (3b, отдельный PR)**: проход объявляет `reads`/`writes`
+   `LATE_FRAGMENT_TESTS`. Правильно — копия depth на кадр (или на swapchain image) и узкие
+   зависимости. С dynamic rendering это два читаемых барьера на кадр.
+
+4. **Мини-рендер-граф (отдельный PR)**: проход объявляет `reads`/`writes`
    (`ImageBinding{image, layout, stage}`), граф сам строит барьеры между проходами.
    Правило: ручные барьеры остаются разрешёнными как escape hatch.
 
-**DoD:** `grep -r "vk::RenderPass" src/` → пусто (кроме third_party); кэш пайплайнов реально
-сокращает старт (замер: второй запуск быстрее); второй проход добавляется без правок существующих
-систем.
-**Риск:** высокий — самый инвазивный этап. Делать отдельной веткой, проверять RenderDoc'ом
-на каждом шаге, держать старый путь за `#ifdef DE_LEGACY_RENDERPASS` до конца фазы.
+Кэш пайплайнов (`vk::PipelineCache`) — **сделано в фазе 1**: класс, `Builder::setCache`,
+все системы и `initInfo.PipelineCache` у imgui. Осталось измерить эффект
+(`vk::PipelineCreationFeedbackCreateInfo`, флаг `eApplicationPipelineCacheHit`) и решить,
+обслуживать ли дальше: если суммарный выигрыш на старте < ~20 мс — зафиксировать и не трогать.
+
+**DoD:** `grep -r "vk::RenderPass" src/` → пусто (кроме third_party); второй проход добавляется
+без правок существующих систем; depth-картинка на кадр, кадры не сериализуются.
+**Риск:** высокий — самый инвазивный этап. Отдельной веткой, RenderDoc на каждом шаге,
+старый путь за `#ifdef DE_LEGACY_RENDERPASS` до конца фазы.
 
 ---
 
@@ -438,22 +531,26 @@ endif()
 
 ## 3. Сводная таблица
 
-| Фаза | Что даёт | Оценка | Риск | Блокирует |
+| Фаза | Что даёт | Оценка | Риск | Статус |
 |---|---|---|---|---|
-| 0. Фундамент | страховка, CI, тесты | 2–3 д | низкий | всё |
-| 1. Контракты | убирает неявные договорённости | 3–5 д | средний | 3, 4 |
-| 2. Кадр | −30% CPU, один submit | 4–6 д | средний | 3b |
-| 3. Проходы | dynamic rendering, кэш пайплайнов | 5–8 д | высокий | второй проход |
+| 0. Фундамент | страховка, пресеты, baseline | 2–3 д | низкий | ✅ закрыта (CI/тесты не заводились, `.clang-format` отвергнут) |
+| 1. Контракты | убирает неявные договорённости | 3–5 д | средний | ✅ закрыта, осталось 6 хвостов |
+| 2. Кадр | −30% CPU, единицы submit'ов | 4–6 д | средний | → следующая; скретч-буферы уже сделаны |
+| 3. Проходы | dynamic rendering, барьеры | 5–8 д | высокий | кэш пайплайнов уже сделан и подключён |
 | 4. Ресурсы | аллокатор, отложенное удаление | 5–10 д | средний | — |
-| 5. C++/reflection | чистота API, автогенерация layout | 2–3 д | низкий | — |
-| 6. Модули | изоляция, скорость сборки | 11–17 д | высокий | — |
-| 7. Docs | вход в проект за день | 1–2 д | низкий | — |
+| 5. C++/reflection | чистота API, автогенерация layout | 2–3 д | низкий | `layout(scalar)` уже включён |
+| 6. Модули | изоляция, скорость сборки | 11–17 д | высокий | отложены (см. §4) |
+| 7. Docs | вход в проект за день | 1–2 д | низкий | этот документ — её часть |
 
-Итого без модулей: **~25–35 дней**, с модулями — **~40–50**. Параллелить можно: 5 и 7 идут
-параллельно любой фазе; 4 можно начать сразу после 1.
+Итого без модулей: **~25–35 дней**, с модулями — **~40–50**. Сделано: фазы 0–1
+(≈6–8 дней по оценке, больше по факту — два перебора layout'ов и scalar-раскладка).
+Осталось: **~15–22 дня** без модулей.
 
-**Порядок, если времени мало (минимальный полезный набор):**
-0 → 1 (пп. 1–3, 5–6) → 2 (пп. 1–4) → 3 (пп. 1–2). Это ~12–15 дней и закрывает 90% болей.
+Параллелить можно: 5 и 7 идут параллельно любой фазе; 4 можно начать сразу после 2.
+
+**Порядок, если времени мало (минимальный полезный набор, осталось):**
+хвосты фазы 1 (полдня) → 2 (пп. 1–3: `UploadContext`, dirty compute, `Scene`) → 3 (пп. 1–3).
+Это ~10–13 дней и закрывает 90% оставшихся болей.
 
 ---
 
