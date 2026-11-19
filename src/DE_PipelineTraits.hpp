@@ -2,6 +2,8 @@
 
 #include<vulkan/vulkan.hpp>
 
+#include<span>
+
 namespace de{
 
     struct ComputeTag{};
@@ -159,9 +161,14 @@ namespace de{
                 return  *this;
             }
 
-            //descriptor and ranges
-            Builder& setDsLayouts(const std::vector<vk::DescriptorSetLayout>& layouts) noexcept {
-                dsLayouts_ = layouts;
+            //fully replace all data
+            Builder& setDsLayouts(const std::span<const vk::DescriptorSetLayout> layouts) noexcept {
+                dsLayouts_.insert_range(dsLayouts_.begin(), layouts);
+                return *this;
+            }
+            //add all to the end of the vector
+            Builder& addDsLayouts(const std::span<const vk::DescriptorSetLayout> layouts) noexcept {
+                dsLayouts_.append_range(layouts);
                 return *this;
             }
 

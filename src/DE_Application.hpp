@@ -112,7 +112,7 @@ private:
 	
 	std::unique_ptr<de::GeometryPool> geometryPool;
 	std::unique_ptr<de::DescriptorPool> globalPool_;
-	std::unordered_map<std::string,de::DescriptorSetLayout> descriptorLayouts_;
+	std::unordered_map<std::string, de::DescriptorSetLayout> descriptorLayouts_;
 	std::unique_ptr<de::MaterialManager> materialManager_;
 	std::unique_ptr<de::TransformBuffer> transformBuffer_;
 	std::unique_ptr<de::IndirectCommandBuffer> indirectBuffer_;

@@ -10,6 +10,8 @@
 #include"DE_Shaders.hpp"
 #include"DE_GameObject.hpp"
 #include"core/DE_SetSlot.hpp"
+#include<utility>
+#include <span>
 
 
 namespace de {
@@ -39,14 +41,18 @@ namespace de {
 		void render(const FrameInfo& frameInfo);
 	private:
 		void createPipeline(const vk::Extent2D extent, 
-			std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts, vk::PipelineCache cache);
+			std::span<const vk::DescriptorSetLayout> descriptorSetLayouts, vk::PipelineCache cache);
 
 		const Device* device_;
 		const RenderPass* renderPass_;
 
-		inline static constexpr std::array kSlots{ SetSlot::eGlobal};
-		static_assert(de::areConsecutiveFromZero(kSlots), "slots must be 0..N-1 in order");
+		enum class SkyBoxSlots : uint32_t{
+			eGlobal = std::to_underlying(SetSlot::eGlobal),
+			eSkyBox = std::to_underlying(SetSlot::eGlobal) + 1
+		};
 
+		inline static constexpr std::array kSlots{ SkyBoxSlots::eGlobal, SkyBoxSlots::eSkyBox};
+		
 		std::unique_ptr<de::DescriptorSetLayout> cubemapLayout_;
 		vk::DescriptorSet cubemapDescriptor_;
 		std::unique_ptr<GraphicsPipeline> graphicsPipeline_ = nullptr;

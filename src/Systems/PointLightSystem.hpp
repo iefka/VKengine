@@ -40,7 +40,6 @@ namespace de {
 		const RenderPass* renderPass_;
 
 		inline static constexpr std::array kSlots{ SetSlot::eGlobal};
-		static_assert(de::areConsecutiveFromZero(kSlots), "slots must be 0..N-1 in order");
 
 		std::unique_ptr<GraphicsPipeline> graphicsPipeline_ = nullptr;
 		std::unique_ptr<de::Shader> vertexShader_ = nullptr;

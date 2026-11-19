@@ -96,7 +96,7 @@ namespace de {
 			DE_ASSERT(sets[i]);
 		}
 
-		bindSets(cmd,pipelineLayout, SetSlot::eGlobal, sets);
+		bindSets(cmd, pipelineLayout, sets);
 
 		if (!indirectCommands_.empty()) {
 				

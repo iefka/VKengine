@@ -34,16 +34,14 @@ namespace de {
 			.build()
 		);
 
-		// later somehow need to rewrite this hardcoded dsLayout[1]
 		cubemapDescriptor_ = DescriptorWriter{ *device_, descriptorPool, *cubemapLayout_}
 			.writeImage(0, &descriptorInfo)
 			.build();
 
-		auto layouts = kSlots
-		|std::views::transform([&](auto slot){
-			return renderContext.descriptorLayouts->get(slot);
-		})|std::ranges::to<std::vector>();
-		layouts.push_back(cubemapLayout_->getLayout());
+		const std::array<vk::DescriptorSetLayout, 2> layouts{
+    		renderContext.descriptorLayouts->get(SetSlot::eGlobal),
+    		cubemapLayout_->getLayout()
+		};
 
 		createPipeline(passContext.extent, layouts, renderContext.pipelinesCache);
 
@@ -51,16 +49,16 @@ namespace de {
 
 	void SkyBoxSystem::render(const FrameInfo& frameInfo){
 		frameInfo.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_->getPipeline());
-		frameInfo.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_->getLayout(),
-			0, frameInfo.descriptorSet, {});
-		frameInfo.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_->getLayout(),
-			1, cubemapDescriptor_, {});
+		std::array<vk::DescriptorSet, kSlots.size()> sets{};
+		sets[std::to_underlying(SkyBoxSlots::eGlobal)] = frameInfo.descriptorSet;
+		sets[std::to_underlying(SkyBoxSlots::eSkyBox)] = cubemapDescriptor_;
+		bindSets(frameInfo.commandBuffer, *graphicsPipeline_->getLayout(), sets);
 
 		frameInfo.commandBuffer.draw(3, 1, 0, 0);
 	}
 
 	void SkyBoxSystem::createPipeline(const vk::Extent2D extent,
-		std::vector<vk::DescriptorSetLayout>&descriptorSetLayouts, vk::PipelineCache cahce){
+		std::span<const vk::DescriptorSetLayout> descriptorSetLayouts, vk::PipelineCache cahce){
 
 		auto vertexInputState = vk::PipelineVertexInputStateCreateInfo{};
 

@@ -51,7 +51,9 @@ namespace de {
 
 	void PointLightSystem::render(const FrameInfo& frameInfo) {
 
-		frameInfo.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_->getLayout(), 0, frameInfo.descriptorSet, {});
+		std::array<vk::DescriptorSet, kSlots.size()> sets{};
+		sets[std::to_underlying(SetSlot::eGlobal)] = frameInfo.descriptorSet;
+		bindSets(frameInfo.commandBuffer,*graphicsPipeline_->getLayout(),sets);
 
 		frameInfo.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_->getPipeline());
 
