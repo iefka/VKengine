@@ -14,6 +14,7 @@
 #include"DE_Shaders.hpp"
 #include"DE_PushConstants.hpp"
 #include"core/DE_SetSlot.hpp"
+#include"core/DE_DescriptorSetLayoutCache.hpp"
 
 
 namespace de {
@@ -64,6 +65,8 @@ namespace de {
 
 		inline static constexpr std::array kSlots{ SetSlot::eGlobal, SetSlot::eTextures,
         	SetSlot::eMaterialData, SetSlot::eTransforms };
+
+		static_assert(areConsecutiveFromZero(kSlots) && "slots must go 0..N");
 
 		std::unique_ptr<GraphicsPipeline> graphicsPipeline_ = nullptr;
 		std::unique_ptr<de::Shader> vertexShader_ = nullptr;

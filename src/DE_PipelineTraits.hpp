@@ -163,7 +163,7 @@ namespace de{
 
             //fully replace all data
             Builder& setDsLayouts(const std::span<const vk::DescriptorSetLayout> layouts) noexcept {
-                dsLayouts_.insert_range(dsLayouts_.begin(), layouts);
+                dsLayouts_.assign_range(layouts);
                 return *this;
             }
             //add all to the end of the vector

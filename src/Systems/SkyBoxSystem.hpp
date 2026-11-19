@@ -10,6 +10,7 @@
 #include"DE_Shaders.hpp"
 #include"DE_GameObject.hpp"
 #include"core/DE_SetSlot.hpp"
+#include"core/DE_DescriptorSetLayoutCache.hpp"
 #include<utility>
 #include <span>
 
@@ -46,12 +47,15 @@ namespace de {
 		const Device* device_;
 		const RenderPass* renderPass_;
 
-		enum class SkyBoxSlots : uint32_t{
+		enum class SkyBoxSlots  : uint32_t{
 			eGlobal = std::to_underlying(SetSlot::eGlobal),
 			eSkyBox = std::to_underlying(SetSlot::eGlobal) + 1
 		};
 
+
 		inline static constexpr std::array kSlots{ SkyBoxSlots::eGlobal, SkyBoxSlots::eSkyBox};
+		static_assert(areConsecutiveFromZero(kSlots) && "slots must go 0..N");
+
 		
 		std::unique_ptr<de::DescriptorSetLayout> cubemapLayout_;
 		vk::DescriptorSet cubemapDescriptor_;

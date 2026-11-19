@@ -48,17 +48,19 @@ namespace de {
 	}
 
 	void SkyBoxSystem::render(const FrameInfo& frameInfo){
-		frameInfo.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_->getPipeline());
+
 		std::array<vk::DescriptorSet, kSlots.size()> sets{};
 		sets[std::to_underlying(SkyBoxSlots::eGlobal)] = frameInfo.descriptorSet;
 		sets[std::to_underlying(SkyBoxSlots::eSkyBox)] = cubemapDescriptor_;
 		bindSets(frameInfo.commandBuffer, *graphicsPipeline_->getLayout(), sets);
 
+		frameInfo.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_->getPipeline());
+
 		frameInfo.commandBuffer.draw(3, 1, 0, 0);
 	}
 
 	void SkyBoxSystem::createPipeline(const vk::Extent2D extent,
-		std::span<const vk::DescriptorSetLayout> descriptorSetLayouts, vk::PipelineCache cahce){
+		std::span<const vk::DescriptorSetLayout> descriptorSetLayouts, vk::PipelineCache cachce){
 
 		auto vertexInputState = vk::PipelineVertexInputStateCreateInfo{};
 
@@ -102,7 +104,7 @@ namespace de {
 			.setRasterizationState(rasterizationState)
 			.setMultisampleState(multisampleInfo)
 			.setDynamicStates(dynamicStates)
-			.setPipelineCache(cahce)
+			.setPipelineCache(cachce)
 			.setDsLayouts(descriptorSetLayouts)
 			.setVertexInputState(vertexInputState)
 			.setColorBlendState(colorBlendState)
