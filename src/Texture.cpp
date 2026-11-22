@@ -1,7 +1,8 @@
+#include "Texture.hpp"
 #include"DE_Device.hpp"
 #include"DE_Memory.hpp"
-#include "Texture.hpp"
 #include"Utility/DE_Utility.hpp"
+#include"gpu/DE_UploadContext.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "third_party/stb_image.h"
@@ -20,7 +21,7 @@ namespace de {
 			return static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
 		}
 
-		void generateMipmaps(const Device& device, vk::Image image,
+		void generateMipmaps(const Device& device, UploadContext& upload, vk::Image image,
 			vk::Format format, int texWidth, int texHeight, uint32_t mipLevels) {
 
 				
@@ -35,7 +36,7 @@ namespace de {
 				}
 			}
 
-			device.executeSingleCommand([&](vk::CommandBuffer commandBuffer){
+			 vk::CommandBuffer commandBuffer = upload.cmd();
 				
 				int32_t mipWidth = texWidth;
 				int32_t mipHeight = texHeight;
@@ -156,13 +157,13 @@ namespace de {
 					vk::DependencyFlags{},
 					nullptr, nullptr, lastLevelBarrier
 				);
-			});
 		}
 	}
 
 	Texture::~Texture() = default;
 	Texture::Texture(std::string pathToTexture,
 		const Device& device,
+		UploadContext& upload,
 		vk::Format textureFormat,
 		vk::SamplerAddressMode addressMode,
 		bool enableAnisotropy,
@@ -187,18 +188,6 @@ namespace de {
 			throw std::runtime_error("texture data is nullptr");
 		}
 
-		MemoryUsageInfo stagingBuferInfo{
-			imageSize,
-			1,
-			0,
-			vk::BufferUsageFlagBits::eTransferSrc
-		};
-
-		Buffer stagingBuffer(device, stagingBuferInfo);
-
-		stagingBuffer.map();
-		stagingBuffer.copyToBuffer(pixels, imageSize, 0);
-		stbi_image_free(pixels);
 
 		ImageUsageInfo imageUsage{
 			imageSize,
@@ -224,23 +213,17 @@ namespace de {
 
 		textureImage_ = std::make_unique<Image>(device, imageUsage);
 
-		device.transitionImageLayout(textureImage_->getImage(),
-			vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
 
-
-		auto region = vk::BufferImageCopy{}
-			.setImageSubresource({ vk::ImageAspectFlagBits::eColor,0,0,1 })
-			.setImageExtent(vk::Extent3D{
-				static_cast<uint32_t>(texWidth),
-				static_cast<uint32_t>(texHeight),
-				1 });
-
-		device.copyBufferToImage(*stagingBuffer.getBuffer(),
-			textureImage_->getImage(),
-			region
+		upload.transitionImageLayout(textureImage_->getImage(),
+    		vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+		upload.copyBufferToImage(textureImage_->getImage(),
+		std::as_bytes(std::span{pixels,imageSize}),
+		vk::Extent3D{static_cast<uint32_t>(texWidth),
+					static_cast<uint32_t>(texHeight),1}
 		);
+		stbi_image_free(pixels);
 
-		generateMipmaps(device, textureImage_->getImage(), textureFormat,
+		generateMipmaps(device, upload, textureImage_->getImage(), textureFormat,
 			texWidth, texHeight, mipLevels);
 
 		textureImageView_ = utl::createImageView(device.getLogicalDevice(), textureImage_->getImage(),
@@ -251,7 +234,9 @@ namespace de {
 
 	}
 
-	Texture::Texture(const Device& device, vk::Format textureFormat,
+	Texture::Texture(const Device& device,
+		UploadContext& upload,
+		vk::Format textureFormat,
 		std::span<std::byte> data, uint32_t width, uint32_t height,
 		vk::SamplerAddressMode addressMode,
 		bool enableAnisotropy,
@@ -264,17 +249,6 @@ namespace de {
 			throw std::runtime_error("texture data is nullptr");
 		}
 
-		MemoryUsageInfo stagingBuferInfo{
-			imageSize,
-			1,
-			0,
-			vk::BufferUsageFlagBits::eTransferSrc
-		};
-
-		Buffer stagingBuffer(device, stagingBuferInfo);
-
-		stagingBuffer.map();
-		stagingBuffer.copyToBuffer(data.data(), imageSize, 0);
 
 		ImageUsageInfo imageUsage{
 			imageSize,
@@ -298,19 +272,14 @@ namespace de {
 
 		textureImage_ = std::make_unique<Image>(device, imageUsage);
 
-		device.transitionImageLayout(textureImage_->getImage(),
-			vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+		upload.transitionImageLayout(textureImage_->getImage(),
+    		vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
 
-		auto region = vk::BufferImageCopy{}
-			.setImageSubresource({ vk::ImageAspectFlagBits::eColor,0,0,1 })
-			.setImageExtent({ width,height,1 });
+		upload.copyBufferToImage(textureImage_->getImage(),
+    		std::span<const std::byte>{reinterpret_cast<const std::byte*>(data.data()), imageSize},
+    		vk::Extent3D{width, height, 1});
 
-		device.copyBufferToImage(*stagingBuffer.getBuffer(),
-			textureImage_->getImage(),
-			region
-		);
-
-		device.transitionImageLayout(textureImage_->getImage(),
+		upload.transitionImageLayout(textureImage_->getImage(),
 			vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
 
 		textureImageView_ = utl::createImageView(device.getLogicalDevice(), textureImage_->getImage(),

@@ -11,18 +11,19 @@
 
 namespace de {
 	class Device;
+	class UploadContext;
 
 	class MaterialBuffer {
 	public:
 		explicit MaterialBuffer(const Device& device, uint32_t initialCapacity);
 
-		uint32_t upload(const GPUMaterialData& data);
+		uint32_t upload(UploadContext& upload, const GPUMaterialData& data);
 		void free(uint32_t index);
 
 		const DescriptorSetLayout& getDescriptorLayout() const noexcept { return *layout_; }
 		vk::DescriptorSet getDescriptorSet() const noexcept { return descriptorSet_; }
 	private:
-		void grow(uint32_t additionalCount);
+		void grow(UploadContext& upload, uint32_t additionalCount);
 		void rewriteDescriptor();
 
 		const Device& device_;

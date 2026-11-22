@@ -7,8 +7,13 @@
 #include<exception>
 #include<utility>
 #include<optional>
+
+
+
+
 //vk
 #include<vulkan/vulkan.hpp>
+
 
 #include "DE_CommandBuffers.hpp"
 
@@ -16,7 +21,6 @@ struct QueueFamily{
 	uint32_t queuFamilyIndex = UINT32_MAX;
 	vk::Queue queue;
 };
-
 namespace de{
 
 	class CommandPool;

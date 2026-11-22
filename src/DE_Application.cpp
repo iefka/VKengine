@@ -14,6 +14,7 @@
 #include "Utility/DE_Utility.hpp"
 #include "Material.hpp"
 #include "DE_MaterialData.hpp"
+#include"gpu/DE_UploadContext.hpp"
 
 
 #include"third_party/imgui/imgui.h"
@@ -172,17 +173,20 @@ void Application::initGameObjects() {
 	constexpr uint32_t kMaxTextures = 1024u;
 	constexpr uint32_t kMaterialInitialCapacity = 256u;
 
+	upload_ = std::make_unique<de::UploadContext>(*device_);
+	upload_->begin();
 	bindlessRegistry_ = std::make_unique<de::BindlessTextureRegistry>(*device_, kMaxTextures);
 	materialBuffer_ = std::make_unique<de::MaterialBuffer>(*device_, kMaterialInitialCapacity);
-	materialManager_ = std::make_unique<de::MaterialManager>(*device_, *bindlessRegistry_, *materialBuffer_);
+	materialManager_ = std::make_unique<de::MaterialManager>(*device_,*upload_, *bindlessRegistry_, *materialBuffer_);
 	transformBuffer_ = std::make_unique<de::TransformBuffer>(*device_, config_.framesInFlight);
 	indirectBuffer_ = std::make_unique<de::IndirectCommandBuffer>(*device_, config_.framesInFlight);
-	geometryPool = std::make_unique<de::GeometryPool>(*device_);
+	geometryPool = std::make_unique<de::GeometryPool>(*device_, *upload_);
 	computeTexture_ = std::make_unique<de::ComputeTextureTarget>(*device_, vk::Extent2D{ 2048, 2048 },
 		config_.framesInFlight, "Shaders/bin/compute.comp.spv");
 	std::vector<de::Material::FrameBinding> computeFrames;
 	computeFrames.reserve(computeTexture_->getFramesInFlight());
 
+	
 	for (uint32_t frame = 0; frame < computeTexture_->getFramesInFlight(); ++frame) {
 		const de::ITextureSource& view = computeTexture_->getTextureSource(frame);
 
@@ -191,7 +195,7 @@ void Application::initGameObjects() {
 		gpuMaterial.specularColor = glm::vec4{ 0.0f, 0.0f, 0.0f, 1.0f };
 		gpuMaterial.diffuseTexIndex = bindlessRegistry_->registerTexture(view);
 
-		const uint32_t materialIndex = materialBuffer_->upload(gpuMaterial);
+		const uint32_t materialIndex = materialBuffer_->upload(*upload_,gpuMaterial);
 		computeFrames.push_back(de::Material::FrameBinding
 			{ .materialIndex = materialIndex});
 	}
@@ -200,7 +204,7 @@ void Application::initGameObjects() {
 		std::move(computeFrames));
 	controlledCamera_ = std::make_unique<de::ControlledCamera>(window_);
 
-	auto smoothVaseModel = de::Mesh::loadFromFile(*device_, *geometryPool,"Models/smooth_vase.obj");
+	auto smoothVaseModel = de::Mesh::loadFromFile(*geometryPool,"Models/smooth_vase.obj");
 	if (!smoothVaseModel) {
 		std::cout << smoothVaseModel.error();
 	}
@@ -220,7 +224,7 @@ void Application::initGameObjects() {
 	auto grid = de::Mesh::GridDesc{
 		.resolutionU = 1024,
 		.resolutionV = 1024};
-	auto computeTorusKnotModel = de::Mesh::prepareForComputeMesh(*device_,*geometryPool,grid);
+	auto computeTorusKnotModel = de::Mesh::prepareForComputeMesh(*geometryPool,grid);
 	computeGeometry_ = std::make_unique<de::RuntimeComputeGeometry>(*device_,
 		*geometryPool,computeTorusKnotModel->getPositionInPool(),grid);
 	auto torusKnot = de::GameObject::createGameObject();
@@ -231,7 +235,7 @@ void Application::initGameObjects() {
 	gameObjects.emplace(torusKnot.getId(), std::move(torusKnot));
 	
 #if 1
-	auto galleryModel = de::Mesh::loadFromFile(*device_, *geometryPool, "assets/HWY_Galleri/161122_HWY_Galleri.obj");
+	auto galleryModel = de::Mesh::loadFromFile(*geometryPool, "assets/HWY_Galleri/161122_HWY_Galleri.obj");
 	auto gallery = de::GameObject::createGameObject();
 	gallery.mesh = std::move(galleryModel->mesh);
 	gallery.materialsByMesh_ = materialManager_->resolveMaterials(
@@ -260,7 +264,7 @@ void Application::initGameObjects() {
 #endif
 
 #if 1
-	auto dragonModel = de::Mesh::loadFromFile(*device_, *geometryPool, "assets/dragon/dragon.obj");
+	auto dragonModel = de::Mesh::loadFromFile(*geometryPool, "assets/dragon/dragon.obj");
 	auto dragon = de::GameObject::createGameObject();
 	dragon.mesh = std::move(dragonModel->mesh);
 	dragon.materialsByMesh_ = materialManager_->resolveMaterials(
@@ -287,7 +291,7 @@ void Application::initGameObjects() {
 #endif
 	
 #if 1
-	auto cubeModel = de::Mesh::loadFromFile(*device_, *geometryPool, "Models/cube.obj");
+	auto cubeModel = de::Mesh::loadFromFile( *geometryPool, "Models/cube.obj");
 	auto cube = de::GameObject::createGameObject();
 	cube.mesh = std::move(cubeModel->mesh);
 	cube.materialsByMesh_.assign(cube.mesh->getSubMeshes().size(), computeMaterial);
@@ -319,6 +323,7 @@ void Application::initGameObjects() {
 		pointLight.transform.translation = glm::vec3(rotateLight * glm::vec4(1.f, 3.f, 1.f, 1.f));
 		gameObjects.emplace(pointLight.getId(), std::move(pointLight));
 	}
+	upload_->flush();
 }
 
 void Application::initSystems(){

@@ -38,6 +38,7 @@ namespace de {
 	class IndirectCommandBuffer;
 	class DescriptorSetLayoutCache;
 	class PipelineCache;
+	class UploadContext;
 }   
 
 class AppTimer {
@@ -110,6 +111,7 @@ private:
 	std::unique_ptr<de::Device> device_;
 	de::Window window_;
 	
+	std::unique_ptr<de::UploadContext> upload_;
 	std::unique_ptr<de::GeometryPool> geometryPool;
 	std::unique_ptr<de::DescriptorPool> globalPool_;
 	std::unordered_map<std::string, de::DescriptorSetLayout> descriptorLayouts_;

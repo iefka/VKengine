@@ -17,6 +17,7 @@ namespace de {
 
 	class Device;
 	class Image;
+	class UploadContext;
 
 	class Texture final : public ITextureSource {
 
@@ -24,11 +25,14 @@ namespace de {
 
 		Texture(std::string pathToTexture,
 			const Device& device,
+			UploadContext& upload,
 			vk::Format textureFormat = vk::Format::eR8G8B8A8Srgb,
 			vk::SamplerAddressMode addressMode = vk::SamplerAddressMode::eClampToEdge,
 			bool enableAnisotropy = true,
 			vk::ImageType imgType = vk::ImageType::e2D);
-		Texture(const Device& device, vk::Format textureFormat,
+		Texture(const Device& device,
+			UploadContext& upload,
+			vk::Format textureFormat,
 			std::span<std::byte> data, uint32_t width, uint32_t height,
 			vk::SamplerAddressMode addressMode = vk::SamplerAddressMode::eClampToEdge,
 			bool enableAnisotropy = true,

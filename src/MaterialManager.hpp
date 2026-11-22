@@ -2,7 +2,10 @@
 
 #include<string>
 #include<unordered_map>
+#include<vector>
 #include<memory>
+
+#include"glm_config.hpp"
 
 namespace tinyobj {
 	struct material_t;
@@ -16,11 +19,13 @@ namespace de {
 	class BindlessTextureRegistry;
 	class MaterialBuffer;
 	struct MaterialRecord;
+	class UploadContext;
 
 	class MaterialManager {
 	public:
 
 		MaterialManager(const Device& device,
+			UploadContext& upload,
 			BindlessTextureRegistry& bindlessRegistry,
 			MaterialBuffer& materialBuffer);
 
@@ -58,6 +63,7 @@ namespace de {
 		std::unique_ptr<TextureManager> textureManager_;
 
 		BindlessTextureRegistry& bindlessRegistry_;
+		UploadContext& upload_;
 		MaterialBuffer& materialBuffer_;
 		const Device& device_;
 

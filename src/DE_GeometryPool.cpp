@@ -1,7 +1,9 @@
-#include"DE_Device.hpp"
 #include "DE_GeometryPool.hpp"
+#include"DE_Device.hpp"
+#include"gpu/DE_UploadContext.hpp"
 
 #include<algorithm>
+#include<cstddef>
 
 namespace de {
 
@@ -30,9 +32,11 @@ namespace de {
 	}
 		GeometryPool::GeometryPool(
 			const Device& device,
+			UploadContext& upload,
 			uint32_t initialVertexCapacity,
 			uint32_t initialIndexCapacity)
 			:device_{device}
+			,upload_{upload}
 			,vertexAllocator_{initialVertexCapacity}
 			,indexAllocator_{initialIndexCapacity} {
 
@@ -53,15 +57,11 @@ namespace de {
 			const vk::DeviceSize oldBytes = sizeof(Mesh::Vertex) * oldCapacity;
 
 			if (oldBytes > 0) {
-				device_.executeSingleCommand([&](vk::CommandBuffer cmd) {
-					const auto region = vk::BufferCopy{}
-						.setSrcOffset(0)
-						.setDstOffset(0)
-						.setSize(oldBytes);
-					cmd.copyBuffer(*vertexBuffer_->getBuffer(), *newBuffer->getBuffer(), region);
-				});
+				upload_.cmd().copyBuffer(*vertexBuffer_->getBuffer(),*newBuffer->getBuffer(),
+					vk::BufferCopy{}.setSize(oldBytes));
 			}
 
+			upload_.retire(std::move(vertexBuffer_));
 			vertexBuffer_ = std::move(newBuffer);
 			vertexAllocator_.grow(newCapacity);
 		}
@@ -76,40 +76,22 @@ namespace de {
 			const vk::DeviceSize oldBytes = sizeof(uint32_t) * oldCapacity;
 
 			if (oldBytes > 0) {
-				device_.executeSingleCommand([&](vk::CommandBuffer cmd) {
-					const auto region = vk::BufferCopy{}
-						.setSrcOffset(0)
-						.setDstOffset(0)
-						.setSize(oldBytes);
-					cmd.copyBuffer(*indexBuffer_->getBuffer(), *newBuffer->getBuffer(), region);
-				});
+				
+				upload_.cmd().copyBuffer(*indexBuffer_->getBuffer(),*newBuffer->getBuffer(),
+					vk::BufferCopy{}.setSize(oldBytes));
 			}
 
-			indexBuffer_ = std::move(newBuffer);
-			indexAllocator_.grow(newCapacity);
+			upload_.retire(std::move(indexBuffer_));   
+    		indexBuffer_ = std::move(newBuffer);
+    		indexAllocator_.grow(newCapacity);
 		}
 	
 		void GeometryPool::uploadIndexData(uint32_t indexOffset,
 			std::span<const uint32_t> indices) {
 			if (indices.empty()) { return; }
 
-			const vk::DeviceSize bufferSize = sizeof(uint32_t) * indices.size();
-			MemoryUsageInfo stagingInfo{
-				bufferSize,1,0,
-				vk::BufferUsageFlagBits::eTransferSrc
-			};
-			Buffer staging(device_, stagingInfo);
-			staging.map();
-			staging.copyToBuffer(indices, 0);
-
-			device_.executeSingleCommand([&](vk::CommandBuffer cmd) {
-				auto region = vk::BufferCopy{}
-					.setSize(bufferSize)
-					.setSrcOffset(0)
-					.setDstOffset(static_cast<vk::DeviceSize>(indexOffset * sizeof(uint32_t)));
-				cmd.copyBuffer(*staging.getBuffer(), *indexBuffer_->getBuffer(), region);
-			});
-
+			upload_.copyBuffer(*indexBuffer_->getBuffer(),std::as_bytes(indices),
+				static_cast<vk::DeviceSize>(indexOffset * sizeof(uint32_t)));
 		}
 
 		GeometryHandle GeometryPool::upload(std::span<const Mesh::Vertex> vertices,
@@ -131,20 +113,9 @@ namespace de {
 			}
 
 			if (vertexCount > 0) {
-				const vk::DeviceSize bufferSize = sizeof(Mesh::Vertex) * vertexCount;
-				MemoryUsageInfo stagingInfo{ bufferSize,1,0,vk::BufferUsageFlagBits::eTransferSrc };
-				Buffer staging(device_, stagingInfo);
-				staging.map();
-				staging.copyToBuffer(vertices, 0);
-
-				device_.executeSingleCommand([&](vk::CommandBuffer cmd) {
-
-					const auto region = vk::BufferCopy{}
-						.setSrcOffset(0)
-						.setDstOffset(static_cast<vk::DeviceSize>(vAlloc->offset) * sizeof(Mesh::Vertex))
-						.setSize(bufferSize);
-					cmd.copyBuffer(*staging.getBuffer(), *vertexBuffer_->getBuffer(), region);
-				});
+		
+				upload_.copyBuffer(*vertexBuffer_->getBuffer(),std::as_bytes(vertices),
+					static_cast<vk::DeviceSize>(vAlloc->offset) * sizeof(Mesh::Vertex));
 			}
 
 			uploadIndexData(iAlloc->offset, indices);

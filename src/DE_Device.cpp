@@ -1,6 +1,8 @@
 //std
 #include<algorithm>
 #include<unordered_map>
+#include<cstdint>
+#include<print>
 //my
 #include"DE_Instance.hpp"
 #include "DE_Device.hpp"
@@ -141,6 +143,9 @@ namespace de{
 
 	void Device::endSingleCommand(const vk::CommandBuffer& commandBuffer) const{
 		
+		static uint32_t submit_count = 0;
+		std::print("submit count: {}",submit_count);
+		submit_count++;
 		commandBuffer.end();
 		const auto submitInfo = vk::SubmitInfo{}
 			.setCommandBufferCount(1)

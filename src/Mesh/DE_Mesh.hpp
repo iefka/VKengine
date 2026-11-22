@@ -50,7 +50,7 @@ namespace de {
 
 		// loading from file with subdivision into sub-mesh
 		static std::expected<LoadResult, std::string>
-			loadFromFile(const Device& device,
+			loadFromFile(
 				GeometryPool& geometryPool,
 				const std::filesystem::path& objFilepath);
 
@@ -61,7 +61,6 @@ namespace de {
 		};
 
 		static std::unique_ptr<Mesh> prepareForComputeMesh(
-			const Device& device,
 			GeometryPool& geometryPool,
 			const GridDesc& grid
 		);
@@ -82,14 +81,10 @@ namespace de {
 		Mesh& operator=(Mesh&&) = delete;
 
 	private:
-		explicit Mesh(const Device& device) : device_(device){}
+		explicit Mesh(){}
 
-
-		void dispatchMeshGeneration(const std::filesystem::path& computeShaderPath,
-			const GridDesc& grid);
 		static std::vector<uint32_t> generateGridIndices(uint32_t resU, uint32_t resV);
 
-		const Device& device_;
 
 		GeometryPool* pool_ = nullptr;
 		GeometryHandle handle_{};

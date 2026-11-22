@@ -12,11 +12,13 @@
 
 namespace de {
 	class Device;
+	class UploadContext;
 
 	class GeometryPool {
 	public:
 
 		explicit GeometryPool(const Device& device,
+			UploadContext& upload,
 			uint32_t initialVertexCapacity = 65536,
 			uint32_t initialIndexCapacity = 262144);
 
@@ -52,6 +54,7 @@ namespace de {
 		void uploadIndexData(uint32_t indexOffset, std::span<const uint32_t> indices);
 
 		const Device& device_;
+		UploadContext& upload_;
 
 		std::unique_ptr<Buffer> vertexBuffer_;
 		RangeAllocator vertexAllocator_;

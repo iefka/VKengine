@@ -1,3 +1,4 @@
+#include"MaterialManager.hpp"
 #include<tiny_obj_loader.h>
 #include<filesystem>
 #include"DE_Device.hpp"
@@ -7,7 +8,8 @@
 #include"Mesh/DE_MeshBaker.hpp"
 #include"TextureManager.hpp"
 #include"Material.hpp"
-#include"MaterialManager.hpp"
+#include"gpu/DE_UploadContext.hpp"
+
 
 namespace de {
 
@@ -32,15 +34,18 @@ namespace de {
 			}
 	}
 
-	MaterialManager::MaterialManager(const Device& device, BindlessTextureRegistry& bindlessRegistry,
+	MaterialManager::MaterialManager(const Device& device, 
+		UploadContext& upload,
+		BindlessTextureRegistry& bindlessRegistry,
 		MaterialBuffer& materialBuffer)
 		:bindlessRegistry_{ bindlessRegistry }
+		,upload_{upload}
 		, materialBuffer_{ materialBuffer }
 		, device_{ device }
 	{
 		textureManager_ = std::make_unique<TextureManager>(device_);
 
-		std::shared_ptr<Texture> defaultTex = textureManager_->getTexture(kDefaultTexturePath);
+		std::shared_ptr<Texture> defaultTex = textureManager_->getTexture(kDefaultTexturePath, upload_);
 
 		const uint32_t diffuseTexIndex = bindlessRegistry_.registerTexture(*defaultTex);
 
@@ -49,7 +54,7 @@ namespace de {
 		defaultData.diffuseTexIndex = diffuseTexIndex;
 		
 
-		const uint32_t materialIndex = materialBuffer_.upload(defaultData);
+		const uint32_t materialIndex = materialBuffer_.upload(upload_, defaultData);
 
 		defaultMaterial_ = std::make_shared<Material>(defaultTex, materialIndex);
 
@@ -85,7 +90,7 @@ namespace de {
 		}
 
 		std::shared_ptr<Texture> texture =
-			textureManager_->getTexture(resolveTexturePath(mtlBaseDir, diffuseTexName));
+			textureManager_->getTexture(resolveTexturePath(mtlBaseDir, diffuseTexName),upload_);
 
 		const uint32_t diffuseTexIndex = bindlessRegistry_.registerTexture(*texture);
 
@@ -96,20 +101,23 @@ namespace de {
 
 		if (!normalTexName.empty()) {
 			std::shared_ptr<Texture> normalTexture =
-				textureManager_->getTexture(resolveTexturePath(mtlBaseDir, normalTexName));
+				textureManager_->getTexture(resolveTexturePath(mtlBaseDir, normalTexName),upload_);
 			gpuData.normalTexIndex = bindlessRegistry_.registerTexture(*normalTexture);
 		}
 		// иначе normalTexIndex остаётся kInvalidTextureIndex (дефолт в GPUMaterialData)
 
-		const uint32_t materialIndex = materialBuffer_.upload(gpuData);
+		const uint32_t materialIndex = materialBuffer_.upload(upload_, gpuData);
 		sharedMaterial = std::make_shared<Material>(texture, materialIndex);
 
 		it->second = sharedMaterial;
 		return sharedMaterial;
 	}
 
-	std::vector<std::shared_ptr<Material>> MaterialManager::resolveMaterials(const std::vector<MaterialRecord>& materials, const std::vector<int32_t>& defaultMaterialIds, const std::string& mtlBaseDir)
-	{
+	std::vector<std::shared_ptr<Material>> MaterialManager::resolveMaterials(
+			const std::vector<MaterialRecord>& materials,
+			const std::vector<int32_t>& defaultMaterialIds,
+			const std::string& mtlBaseDir){
+
 		std::vector<std::shared_ptr<Material>> result;
 		result.reserve(defaultMaterialIds.size());
 

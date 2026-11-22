@@ -1,11 +1,12 @@
+#include "TextureManager.hpp"
 #include"DE_Device.hpp"
 #include"Texture.hpp"
-#include "TextureManager.hpp"
+#include"gpu/DE_UploadContext.hpp"
 
 
 
 namespace de {
-    std::shared_ptr<Texture> TextureManager::getTexture(std::string texturePath){
+    std::shared_ptr<Texture> TextureManager::getTexture(std::string texturePath, UploadContext& upload){
 
         //trying implace element
         auto [it,success] = cache_.try_emplace(texturePath);
@@ -16,7 +17,7 @@ namespace de {
         //checking if nullptr
         if (!texture) {
             //if nullptr creating Texture
-            texture = std::make_shared<Texture>(texturePath, device_);
+            texture = std::make_shared<Texture>(texturePath, device_, upload);
 
             //asign texture to manager element
             it->second = texture;

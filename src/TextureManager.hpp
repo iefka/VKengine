@@ -10,12 +10,13 @@ namespace de {
 
 	class Texture;
 	class Device;
+	class UploadContext;
 
 	class TextureManager {
 	public:
 		TextureManager(const Device& device):device_{device}{}
 
-		std::shared_ptr<Texture> getTexture(std::string texturePath);
+		std::shared_ptr<Texture> getTexture(std::string texturePath,UploadContext& upload);
 
 	private:
 		std::unordered_map<std::string, std::weak_ptr<Texture>> cache_;

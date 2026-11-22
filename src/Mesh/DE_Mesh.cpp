@@ -9,7 +9,6 @@
 
 namespace de {
     std::expected<Mesh::LoadResult, std::string> Mesh::loadFromFile(
-        const Device& device,
         GeometryPool& geometryPool,
         const std::filesystem::path& objFilepath){
 
@@ -32,7 +31,7 @@ namespace de {
             }
             ) | std::ranges::to<std::vector>();
 
-        auto mesh = std::unique_ptr<Mesh>(new Mesh(device));
+        auto mesh = std::unique_ptr<Mesh>(new Mesh());
         mesh->pool_ = &geometryPool;
         mesh->handle_ = geometryPool.upload(vertices, geometry.indices);
 
@@ -55,11 +54,10 @@ namespace de {
     }
 
     std::unique_ptr<Mesh> Mesh::prepareForComputeMesh(
-        const Device& device,
         GeometryPool& geometryPool,
         const GridDesc& grid){
         
-        auto mesh = std::unique_ptr<Mesh>(new Mesh(device));
+        auto mesh = std::unique_ptr<Mesh>(new Mesh());
 
         const uint32_t vertexCount = grid.resolutionU * grid.resolutionV;
         auto indices = generateGridIndices(grid.resolutionU, grid.resolutionV);
@@ -100,80 +98,6 @@ namespace de {
             .setInstanceCount(1)
             .setVertexOffset(static_cast<int32_t>(handle_.vertexOffset) + sub.vertexOffset)
             .setIndexCount(sub.indexCount);
-    }
-
-
-    void Mesh::dispatchMeshGeneration(const std::filesystem::path & computeShaderPath, const GridDesc & grid){
-        struct PushData {
-            uint32_t resolutionU{};
-            uint32_t resolutionV{};
-            float time{};
-            float _pad{};
-        };
-
-        auto descriptorPool = DescriptorPool::Builder{ device_ }
-            .setMaxSets(1)
-            .addPoolSize(vk::DescriptorType::eStorageBuffer, 1)
-            .build();
-
-
-        auto descriptorLayout = DescriptorSetLayout::Builder{ device_ }
-            .addBinding(0, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eCompute)
-            .build();
-
-        auto bufferInfo = pool_->getVertexRangeDescriptor(handle_.vertexOffset,handle_.vertexCount);
-        auto descriptorSet = DescriptorWriter{ device_, descriptorPool, descriptorLayout}
-            .writeBuffer(0, &bufferInfo)
-            .build();
-
-        
-        PushData pushData{
-            .resolutionU = grid.resolutionU,
-            .resolutionV = grid.resolutionV,
-            .time = 0.f
-        };
-        PushConstant<PushData> pushConstant(vk::ShaderStageFlagBits::eCompute);
-        pushConstant.setValue(pushData);
-
-        Shader computeShader(device_, computeShaderPath);
-
-        const auto computePipelineInfo = ComputePipeline::Builer{}
-            .setPushConstantRanges({ pushConstant.getRange() })
-            .addDsLayout(descriptorLayout.getLayout())
-            .setShaderStage(computeShader.getStageInfo(vk::ShaderStageFlagBits::eCompute));
-        ComputePipeline computePipeline(device_, computePipelineInfo);
-
-
-        device_.executeSingleCommand([&](const vk::CommandBuffer& cmd) {
-            const auto& pipeline = *computePipeline.getPipeline();
-            const auto& pipeLayout = *computePipeline.getLayout();
-
-            cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline);
-            cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute, pipeLayout, 0, descriptorSet, {});
-            cmd.pushConstants(pipeLayout, vk::ShaderStageFlagBits::eCompute,0,sizeof(pushData),&pushData);
-
-            const uint32_t groupX = (grid.resolutionU + 15) / 16;
-            const uint32_t groupY = (grid.resolutionV + 15) / 16;
-            cmd.dispatch(groupX, groupY, 1);
-
-            const auto barier = vk::BufferMemoryBarrier{}
-                .setSrcAccessMask(vk::AccessFlagBits::eShaderWrite)
-                .setDstAccessMask(vk::AccessFlagBits::eVertexAttributeRead)
-                .setBuffer(pool_->getVertexBufferHandle())
-                .setOffset(static_cast<vk::DeviceSize>(handle_.vertexOffset) * sizeof(Vertex))
-                .setSize(static_cast<vk::DeviceSize>(handle_.vertexCount) * sizeof(Vertex))
-                .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
-                .setDstQueueFamilyIndex(vk::QueueFamilyIgnored);
-
-            cmd.pipelineBarrier(
-                vk::PipelineStageFlagBits::eComputeShader,
-                vk::PipelineStageFlagBits::eVertexInput,
-                {},
-                {},
-                barier,
-                {}
-            );
-        });
     }
 
     std::vector<uint32_t> Mesh::generateGridIndices(uint32_t resU, uint32_t resV){
