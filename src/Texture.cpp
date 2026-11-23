@@ -227,7 +227,7 @@ namespace de {
 			texWidth, texHeight, mipLevels);
 
 		textureImageView_ = utl::createImageView(device.getLogicalDevice(), textureImage_->getImage(),
-			textureFormat, vk::ImageAspectFlagBits::eColor,vk::ImageViewType::e2D,1,0,mipLevels,0);
+			textureFormat, vk::ImageAspectFlagBits::eColor, vk::ImageViewType::e2D, 1, 0, mipLevels, 0);
 
 		textureSampler_ = utl::createTextureSampler(device.getLogicalDevice(), addressMode, 
 			enableAnisotropy,4.f,static_cast<float>(mipLevels - 1));

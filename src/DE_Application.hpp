@@ -69,7 +69,7 @@ struct ApplicationConfig {
 	int windowHeight = 1000;
 	const char* windowTitle = "MyEngine";
 	uint32_t swapchainImageCount = 2;
-	uint32_t framesInFlight = 2;
+	uint32_t framesInFlight = 3;
 
 	// Vulkan metadata
 	const char* applicationName = "Dimasik";

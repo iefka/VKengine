@@ -1,11 +1,10 @@
+#include "DE_Device.hpp"
 //std
 #include<algorithm>
 #include<unordered_map>
 #include<cstdint>
-#include<print>
 //my
 #include"DE_Instance.hpp"
-#include "DE_Device.hpp"
 
 
 namespace de{
@@ -143,9 +142,6 @@ namespace de{
 
 	void Device::endSingleCommand(const vk::CommandBuffer& commandBuffer) const{
 		
-		static uint32_t submit_count = 0;
-		std::print("submit count: {}",submit_count);
-		submit_count++;
 		commandBuffer.end();
 		const auto submitInfo = vk::SubmitInfo{}
 			.setCommandBufferCount(1)
@@ -212,7 +208,9 @@ namespace de{
 		
 		using FeaturesChain = vk::StructureChain < 
 			vk::PhysicalDeviceFeatures2,
-			vk::PhysicalDeviceVulkan12Features> ;
+			vk::PhysicalDeviceVulkan12Features,
+			vk::PhysicalDeviceVulkan13Features,
+			vk::PhysicalDeviceVulkan14Features> ;
 		FeaturesChain featuresChainCheck;
 		FeaturesChain featuresChainEnable;
 
@@ -223,6 +221,10 @@ namespace de{
 		}
 		if (featuresChainCheck.get<vk::PhysicalDeviceFeatures2>().features.multiDrawIndirect == false) {
 			throw std::runtime_error("multiDrawIndirect feature is not suported");
+		}
+		if (featuresChainCheck.get<vk::PhysicalDeviceFeatures2>().features.drawIndirectFirstInstance == false) {
+			throw std::runtime_error(
+				"drawIndirectFirstInstance feature is not supported");
 		}
 		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan12Features>().shaderSampledImageArrayNonUniformIndexing == false) {
 			throw std::runtime_error("shaderSampledImageArrayNonUniformIndexing feature is not suported");
@@ -245,9 +247,20 @@ namespace de{
 		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan12Features>().scalarBlockLayout == false) {
 			throw std::runtime_error("scalarBlockLayout feature is not suported");
 		}
-		if (featuresChainCheck.get<vk::PhysicalDeviceFeatures2>().features.drawIndirectFirstInstance == false) {
-			throw std::runtime_error(
-				"drawIndirectFirstInstance feature is not supported");
+		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering == false) {
+			throw std::runtime_error("dynamicRendering feature is not suported");
+		}
+		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan13Features>().synchronization2 == false) {
+			throw std::runtime_error("synchronization2 feature is not suported");
+		}
+		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan14Features>().dynamicRenderingLocalRead == false) {
+			throw std::runtime_error("dynamicRenderingLocalRead feature is not suported");
+		}
+		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan14Features>().pushDescriptor == false) {
+			throw std::runtime_error("pushDescriptor feature is not suported");
+		}
+		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan14Features>().maintenance6 == false) {
+			throw std::runtime_error("maintenance6 feature is not suported");
 		}
 		
 
@@ -261,6 +274,11 @@ namespace de{
 		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingSampledImageUpdateAfterBind = vk::True;
 		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingStorageBufferUpdateAfterBind = vk::True;
 		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().scalarBlockLayout = vk::True;
+		featuresChainCheck.get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering = vk::True;
+		featuresChainCheck.get<vk::PhysicalDeviceVulkan13Features>().synchronization2 = vk::True;
+		featuresChainCheck.get<vk::PhysicalDeviceVulkan14Features>().dynamicRenderingLocalRead = vk::True; 
+		featuresChainCheck.get<vk::PhysicalDeviceVulkan14Features>().pushDescriptor = vk::True; 
+		featuresChainCheck.get<vk::PhysicalDeviceVulkan14Features>().maintenance6 = vk::True;
 
 
 		const auto deviceCreateInfo = vk::DeviceCreateInfo{}

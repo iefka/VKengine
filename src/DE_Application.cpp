@@ -111,7 +111,6 @@ void Application::initResources() {
 
 void Application::initDescriptorSets() {
 
-
 	constexpr uint32_t maxUniqueTextures = 64;
 
 	globalPool_ = std::make_unique<de::DescriptorPool>(
@@ -125,11 +124,7 @@ void Application::initDescriptorSets() {
 	descriptorLayouts_.try_emplace("ubo",de::DescriptorSetLayout::Builder{*device_}
 		.addBinding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eAllGraphics)
 		.build()
-	);
-
-	//set 1
-
-	
+	);	
 
 }
 
