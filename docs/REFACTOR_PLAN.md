@@ -416,13 +416,33 @@ endif()
 **Цель:** убрать `VkRenderPass` из конструкторов систем; открыть дорогу второму проходу
 (IBL-фон, пре-пасс, MSAA, деферред) без пересоздания пайплайнов.
 
+**Порядок изменился: dynamic rendering идёт раньше `Scene`.** `Scene` отложен до момента, когда
+появится сцена-как-данные: без неё он даёт только детерминированный порядок обхода, а тот
+покупается заменой `GameObject::Map` на `std::map` (одна строка, `DE_GameObject.hpp:51`).
+
 1. **Dynamic rendering** (core Vulkan 1.3, `vk::RenderingAttachmentInfo` + `cmd.beginRendering`):
    - удалить `DE_RenderPass.{hpp,cpp}`, `DE_RenderTarget.hpp`, `onSwapchainRecreation` из
      `IRenderPass`;
    - `IRenderPass::record(const FrameInfo&, const PassTarget&)`, где `PassTarget` — вектор
      `RenderingAttachmentInfo` + extent (сегодня эту роль играет `PassContext`);
    - пайплайны создаются с `vk::PipelineRenderingCreateInfo` (форматы + samples), без render pass;
-   - `Swapchain` перестаёт держать render pass и framebuffer'ы.
+   - `Swapchain` перестаёт держать render pass и framebuffer'ы;
+   - **переходы layout'ов становятся явными** и делаются в том же шаге: `initialLayout`/
+     `finalLayout` вложения раньше делали их неявно. На кадр: `Undefined → ColorAttachmentOptimal`
+     в начале, `ColorAttachmentOptimal → PresentSrcKHR` перед `presentKHR`;
+     для depth `Undefined → DepthAttachmentOptimal` (oldLayout `Undefined` = «содержимое не нужно»,
+     поэтому можно каждый кадр). Владелец переходов — `Renderer`, проходы про них не знают;
+   - второй проход (GUI) больше не ходит через `PresentSrcKHR`: один `beginRendering` на проход,
+     у второго `loadOp = eLoad` и тот же `ColorAttachmentOptimal`. Забытый `eLoad` = очищенный
+     фон и «пропавшая» сцена;
+   - ловушки времени жизни: `vk::PipelineRenderingCreateInfo` и `vk::RenderingAttachmentInfo`
+     для depth передаются **указателями** (`setPNext`, `setPDepthAttachment`) — они обязаны жить
+     до вызова `createGraphicsPipelines` / `beginRendering`, временный объект в цепочке вызовов
+     даёт мусорные форматы без единой ошибки компиляции;
+   - imgui: `UseDynamicRendering = true`, поля переехали под `PipelineInfoMain`
+     (`RenderPass`, `MSAASamples`, `PipelineRenderingCreateInfo`) — это breaking change снимка
+     в `third_party`; `vkCmdBeginRendering` backend **не** вызывает, rendering должен быть уже
+     открыт приложением при `ImGui_ImplVulkan_RenderDrawData`.
 
 2. **Один API барьеров**: заменить `de::imageBarrier` и `Device::transitionImageLayout` на
    `de::Barrier`-хелпер на `vk::DependencyInfo`/`vk::ImageMemoryBarrier2`. Ты на Vulkan 1.4, то
@@ -542,7 +562,7 @@ endif()
 | 0. Фундамент | страховка, пресеты, baseline | 2–3 д | низкий | ✅ закрыта (CI/тесты не заводились, `.clang-format` отвергнут) |
 | 1. Контракты | убирает неявные договорённости | 3–5 д | средний | ✅ закрыта, осталось 6 хвостов |
 | 2. Кадр | −30% CPU, единицы submit'ов | 3–5 д | средний | → следующая; `UploadContext` в работе, dirty compute вычеркнут, осталась `Scene` |
-| 3. Проходы | dynamic rendering, барьеры | 5–8 д | высокий | кэш пайплайнов уже сделан и подключён |
+| 3. Проходы | dynamic rendering, барьеры | 5–8 д | высокий | → следующая (dynamic rendering раньше `Scene`); кэш пайплайнов уже сделан |
 | 4. Ресурсы | аллокатор, отложенное удаление | 5–10 д | средний | — |
 | 5. C++/reflection | чистота API, автогенерация layout | 2–3 д | низкий | `layout(scalar)` уже включён |
 | 6. Модули | изоляция, скорость сборки | 11–17 д | высокий | отложены (см. §4) |
@@ -555,8 +575,8 @@ endif()
 Параллелить можно: 5 и 7 идут параллельно любой фазе; 4 можно начать сразу после 2.
 
 **Порядок, если времени мало (минимальный полезный набор, осталось):**
-хвосты фазы 1 (полдня) → 2 (пп. 1–2: `UploadContext`, `Scene`) → 3 (пп. 1–3).
-Это ~9–12 дней и закрывает 90% оставшихся болей.
+хвосты фазы 1 (полдня) → 2 (п. 1: `UploadContext`; `Scene` отложен) → 3 (пп. 1–3).
+Это ~8–11 дней и закрывает 90% оставшихся болей.
 
 ---
 
