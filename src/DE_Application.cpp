@@ -472,9 +472,6 @@ void Application::handleInputs(float deltaTime) {
 }
 
 void Application::updateScene(float deltaTime, float totalTime) {
-#if 0
-	shaderTexturingPass_->updateTime(totalTime);
-#endif
 
 	computeGeometry_->updateTime(deltaTime);
 	computeTexture_->updateTime(totalTime);
