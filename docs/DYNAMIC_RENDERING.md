@@ -177,6 +177,12 @@ Builder& setRenderingFormats(vk::Format color, vk::Format depth = vk::Format::eU
 const vk::PipelineRenderingCreateInfo* getRenderingInfo() const noexcept { return &renderingInfo_; }
 ```
 
+Можно вернуть и по ссылке (`const vk::PipelineRenderingCreateInfo&`) — тогда в `create()`
+будет `.setPNext(&builder.getRenderingInfo())`. Функционально эквивалентно: адрес берётся
+у члена `Builder`'а, время жизни то же. Форма с указателем выбрана только ради единообразия
+с соседними геттерами этого класса (`getInputStateInfo`, `getMultisampleInfo` и т. д. —
+все возвращают указатели, потому что их значения сразу уходят в `pNext`).
+
 **`:252`** — в `create()`:
 
 ```cpp
@@ -439,29 +445,50 @@ vk::ImageView getDepthView()            const { return *depthImageView_; }
 
 ### 3.7 imgui, `DE_Gui.cpp:84–91`
 
+Поле называется `PipelineInfoMain.PipelineRenderingCreateInfo` и имеет тип **C-структуры**
+`VkPipelineRenderingCreateInfoKHR` (`imgui_impl_vulkan.h:85–94`), а не `vk::...`. Отсюда два
+отличия от кода пайплайнов:
+
 ```cpp
-.PipelineInfoMain = {
-    .RenderPass = nullptr,
-    .Subpass = 0,
-    .MSAASamples = VK_SAMPLE_COUNT_1_BIT,
-    .ExtraDynamicStates = {},
-    .PipelineRenderingCreateInfo = vk::PipelineRenderingCreateInfo{}
-        .setColorAttachmentFormats(window.getSurfaceFormat().format),
-},
-.UseDynamicRendering = true,
+// формат держим в переменной: на него смотрит указатель в структуре
+VkFormat colorFormat = static_cast<VkFormat>(window_.getSurfaceFormat().format);
+
+initInfo.UseDynamicRendering = true;
+initInfo.PipelineInfoMain.RenderPass = nullptr;
+initInfo.PipelineInfoMain.Subpass = 0;
+initInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+initInfo.PipelineInfoMain.PipelineRenderingCreateInfo = VkPipelineRenderingCreateInfo{
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+    .pNext = nullptr,
+    .viewMask = 0,
+    .colorAttachmentCount = 1,
+    .pColorAttachmentFormats = &colorFormat,
+};
 ```
 
-Три вещи, которые здесь важны:
+Четыре вещи, которые здесь важны:
 
-1. **`RenderPass` обязан остаться `nullptr`.** Сейчас там `*renderPass_->getRenderPass()`
+1. **`sType` надо выставить руками.** У `vk::PipelineRenderingCreateInfo` `sType` заполняется
+   конструктором, у C-структуры — нет. Backend проверяет его ассертом:
+   `PipelineRenderingCreateInfo::sType must be VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR`
+   (`imgui_impl_vulkan.cpp:1106`). С нулём в `sType` main-пайплайн imgui просто не создастся.
+2. **`setColorAttachmentFormats(...)` здесь недоступен** — это сеттер `vk::`-обёртки. Можно
+   присвоить `vk::PipelineRenderingCreateInfo` целиком (у него есть оператор приведения к
+   C-структуре), но тогда `pColorAttachmentFormats` будет указывать на внутренний массив
+   временного объекта. Backend форматы копирует (changelog `2025-04-07`), так что это
+   сработает, но полагаться на документированный deep-copy в коде инициализации не стоит —
+   дешевле держать `VkFormat` в переменной, как выше.
+3. **`RenderPass` обязан остаться `nullptr`.** Сейчас там `*renderPass_->getRenderPass()`
    (`:85`) — при `UseDynamicRendering = true` и ненулевом render pass backend создаст
    пайплайн под render pass, а рисовать будет в dynamic-режиме.
-2. **Поля живут под `PipelineInfoMain`** — это новое расположение в 1.93 WIP
+4. **Поля живут под `PipelineInfoMain`** — это новое расположение в 1.93 WIP
    (changelog `imgui_impl_vulkan.cpp:47`). Старые `.RenderPass`/`.MSAASamples` в `initInfo`
    просто не скомпилируются.
-3. **`PipelineRenderingCreateInfo` здесь передаётся по значению** — backend делает deep-copy
-   массива форматов (changelog `2025-04-07`), поэтому временный объект тут безопасен,
-   в отличие от `Builder`'а в 3.2.
+
+`ImGui_ImplVulkan_PipelineInfo::PipelineRenderingCreateInfo` существует только под
+`#ifdef IMGUI_IMPL_VULKAN_HAS_DYNAMIC_RENDERING` (`imgui_impl_vulkan.h:91–93`) — с твоим
+заголовком Vulkan 1.4 макрос определён, но если кто-то соберёт проект со старыми headers,
+поле исчезнет и будет ошибка компиляции, а не тихий откат на render pass.
 
 `ImGui_ImplVulkan_RenderDrawData` вызывается внутри уже открытого rendering instance:
 backend сам `vkCmdBeginRendering` не вызывает, это проверено по исходнику
