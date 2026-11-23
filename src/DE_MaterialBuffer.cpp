@@ -85,6 +85,7 @@ namespace de{
 			
 		}
 
+		upload.retire(std::move(buffer_));
 		buffer_ = std::move(newBuffer);
 		allocator_.grow(newCapacity);
 		//buffer changed, need to upate descriptor with new one

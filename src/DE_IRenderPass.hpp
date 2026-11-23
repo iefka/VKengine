@@ -12,7 +12,6 @@ namespace de {
 	public:
 		virtual ~IRenderPass() = default;
 		virtual std::vector<vk::ClearValue> getClearValues() const = 0;
-		virtual const RenderTarget& getRenderTarget() const = 0;
 		virtual void preRecord(const FrameData&) {}
 		virtual void record(const FrameData& frameData) = 0;
 		virtual void onSwapchainRecreation(const Swapchain&) {}

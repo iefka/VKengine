@@ -6,7 +6,6 @@
 #include<memory>
 #include<optional>
 #include "DE_Swapchain.hpp"
-#include "DE_RenderTarget.hpp"
 #include"DE_IRenderPass.hpp"
 #include"DE_IComputeStep.hpp"
 
@@ -23,26 +22,6 @@ namespace de {
 		vk::CommandBuffer commandBuffer;
 	};
 
-
-	class SwapchainRenderTarget : public RenderTarget {
-	public:
-
-		// swapchain pointer is nullptr on creation, use rebind() befor use!
-		SwapchainRenderTarget() = default;
-		void rebind(const Swapchain& swapchain) { swapchain_ = &swapchain; }
-
-		vk::Framebuffer getFramebuffer(uint32_t imageIndex) const override {
-			return swapchain_->getFrameBuffer(imageIndex);
-		}
-		vk::RenderPass getRenderPass() const override {
-			return swapchain_->getRenderPass();
-		}
-		vk::Extent2D getExtent() const override {
-			return swapchain_->getSwapchainExtent();
-		}
-	private:
-		const Swapchain* swapchain_ = nullptr;
-	};
 
 	class Renderer {
 	public:
@@ -82,8 +61,6 @@ namespace de {
 			computeSteps_.erase(removed.begin(), removed.end());
 		}
 
-		const RenderTarget& getSwapchainRenderTarget() const noexcept  { return swapchainTarget_; }
-
 		const RenderPass& getMainRenderPass() { return *renderPass_; }
 		RenderPass* getMainRenderPassPtr() { return renderPass_.get(); }
 
@@ -101,7 +78,6 @@ namespace de {
 		Window& window_;
 		const CommandPool& commandPool_;
 		std::optional<Swapchain> swapchain_;
-		SwapchainRenderTarget swapchainTarget_;
 		std::unique_ptr<CommandBuffer> commandBuffer_;
 		uint32_t minImageCount_;
 

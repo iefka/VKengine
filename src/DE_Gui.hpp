@@ -46,7 +46,6 @@ namespace de {
 			 const Renderer& renderer);
 		 ~GUIRenderPass();
 		 std::vector<vk::ClearValue> getClearValues()  const override;
-		 const RenderTarget& getRenderTarget() const override;
 		 void record(const FrameData& frameData) override;
 		 void onSwapchainRecreation(const Swapchain& sc) override;
 

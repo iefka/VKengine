@@ -141,8 +141,7 @@ namespace de{
 			.setBaseArrayLayer(0)
 			.setLayerCount(layerCount)
 			.setLevelCount(levelCount)
-			.setBaseMipLevel(0)
-			.setLevelCount(1);
+			.setBaseMipLevel(0);
 
 		 auto imageBarier = vk::ImageMemoryBarrier{}
 			.setOldLayout(oldLayout)

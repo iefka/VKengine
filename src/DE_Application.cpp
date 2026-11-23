@@ -339,7 +339,8 @@ void Application::initSystems(){
 	};
 
 	passContext_ = {
-		.renderPass = renderer_->getMainRenderPassPtr(),
+		.colorFormat = window_.getSurfaceFormat().format,
+		.depthFormat = vk::Format::eD32Sfloat,
 		.extent = window_.getExtent()
 
 	};

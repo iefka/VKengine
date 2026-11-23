@@ -253,15 +253,7 @@ namespace de{
 		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan13Features>().synchronization2 == false) {
 			throw std::runtime_error("synchronization2 feature is not suported");
 		}
-		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan14Features>().dynamicRenderingLocalRead == false) {
-			throw std::runtime_error("dynamicRenderingLocalRead feature is not suported");
-		}
-		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan14Features>().pushDescriptor == false) {
-			throw std::runtime_error("pushDescriptor feature is not suported");
-		}
-		if (featuresChainCheck.get<vk::PhysicalDeviceVulkan14Features>().maintenance6 == false) {
-			throw std::runtime_error("maintenance6 feature is not suported");
-		}
+
 		
 
 		featuresChainEnable.get<vk::PhysicalDeviceFeatures2>().features.samplerAnisotropy = vk::True;
@@ -274,11 +266,9 @@ namespace de{
 		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingSampledImageUpdateAfterBind = vk::True;
 		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingStorageBufferUpdateAfterBind = vk::True;
 		featuresChainEnable.get<vk::PhysicalDeviceVulkan12Features>().scalarBlockLayout = vk::True;
-		featuresChainCheck.get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering = vk::True;
-		featuresChainCheck.get<vk::PhysicalDeviceVulkan13Features>().synchronization2 = vk::True;
-		featuresChainCheck.get<vk::PhysicalDeviceVulkan14Features>().dynamicRenderingLocalRead = vk::True; 
-		featuresChainCheck.get<vk::PhysicalDeviceVulkan14Features>().pushDescriptor = vk::True; 
-		featuresChainCheck.get<vk::PhysicalDeviceVulkan14Features>().maintenance6 = vk::True;
+		featuresChainEnable.get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering = vk::True;
+		featuresChainEnable.get<vk::PhysicalDeviceVulkan13Features>().synchronization2 = vk::True;
+		
 
 
 		const auto deviceCreateInfo = vk::DeviceCreateInfo{}
