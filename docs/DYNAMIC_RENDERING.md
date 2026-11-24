@@ -98,7 +98,7 @@ DE_ASSERT(logicalDevice.getProcAddr("vkCmdBeginRendering") != nullptr);
 | `DE_Renderer.hpp:27–45` | `SwapchainRenderTarget` — прокси в `Swapchain` | + 4 геттера вьюх | удалить |
 | `DE_Renderer.hpp:85–88` | `getSwapchainRenderTarget`, `getMainRenderPass{,Ptr}` | — | удалить |
 | `DE_Renderer.hpp:114` | член `unique_ptr<RenderPass>` | — | удалить |
-| `DE_IRenderPass.hpp:14–18` | `getClearValues`, `getRenderTarget`, `preRecord`, `onSwapchainRecreation` | clear → optional'ы, `getRenderTarget` оставить до C | остальное удалить |
+| `DE_IRenderPass.hpp:14–18` | `getClearValues`, `getRenderTarget`, `preRecord`, `onSwapchainRecreation` | `getClearValues` → `ColorAttachment` + `optional<DepthAttachment>`, `getRenderTarget` оставить до C | остальное удалить |
 | `core/DE_PassContext.hpp:10–11` | `renderPass`, `frameBuffer` | → `colorFormat`, `depthFormat` | — |
 | `DE_PipelineTraits.hpp:159,212,229,252` | `setRenderPass`/`getRenderPass`/член/передача | → `PipelineRenderingCreateInfo` | — |
 | `DE_RenderSystem.cpp:157`, `PointLightSystem.cpp:114`, `SkyBoxSystem.cpp:101` | `.setRenderPass(*renderPass_->getRenderPass())` | → `.setRenderingFormats(...)` | — |
@@ -106,7 +106,7 @@ DE_ASSERT(logicalDevice.getProcAddr("vkCmdBeginRendering") != nullptr);
 | `DE_Swapchain.hpp:113,115,123,133` | `getFrameBuffer`, `getRenderPass`, член, `framebuffers_` | + 4 геттера | удалить |
 | `DE_Gui.cpp:39–56` | свой `RenderPass` для GUI | без изменений | удалить |
 | `DE_Gui.cpp:84–91` | imgui `initInfo` с `RenderPass` | → dynamic | — |
-| `DE_MainRenderPass.cpp:66–73` | clear values + `getRenderTarget` | clear → optional'ы | `getRenderTarget` удалить |
+| `DE_MainRenderPass.cpp:66–73` | clear values + `getRenderTarget` | `getClearValues` → `colorAttachment`/`depthAttachment` | `getRenderTarget` удалить |
 | `DE_Application.cpp:341–344` | `passContext_.renderPass = getMainRenderPassPtr()` | → форматы | — |
 
 Глубина `eD32Sfloat` сейчас захардкожена в трёх местах: `DE_Renderer.cpp:22`,
@@ -226,6 +226,12 @@ viewport и scissor у тебя динамические, а после `beginRe
 
 ### 3.4 `DE_IRenderPass.hpp`
 
+Контракт теперь описывает **вложения**, а не только clear-значения. Было
+`std::vector<vk::ClearValue> getClearValues()` (`DE_IRenderPass.hpp:14`), где вложения вообще не
+выражались: `loadOp`/`storeOp` жили в `VkRenderPass` (`DE_MainRenderPass.cpp:44–63`,
+`DE_Gui.cpp:39–56`). С `vkCmdBeginRendering` их негде взять, кроме самого прохода, — поэтому
+вместо вектора две структуры одинаковой формы.
+
 ```cpp
 #pragma once
 
@@ -236,20 +242,29 @@ namespace de {
     struct FrameData;
     class RenderTarget;
 
+    struct ColorAttachment {
+        vk::AttachmentLoadOp  loadOp  = vk::AttachmentLoadOp::eLoad;    // eClear | eLoad | eDontCare
+        vk::AttachmentStoreOp storeOp = vk::AttachmentStoreOp::eStore;  // eStore | eDontCare
+        vk::ClearValue        clear{};                                  // читается только при eClear
+    };
+
+    struct DepthAttachment {
+        vk::AttachmentLoadOp  loadOp  = vk::AttachmentLoadOp::eLoad;
+        vk::AttachmentStoreOp storeOp = vk::AttachmentStoreOp::eDontCare;
+        vk::ClearValue        clear{};
+    };
+
     class IRenderPass {
     public:
         virtual ~IRenderPass() = default;
 
-        // nullopt   -> loadOp = eLoad     (рисовать поверх существующего)
-        // значение  -> loadOp = eClear
-        virtual std::optional<vk::ClearValue> colorClearValue() const { return std::nullopt; }
+        // Вложение цвета есть у любого прохода этого рендерера, поэтому без optional:
+        // «нет цвета» — состояние, которого не бывает, и различать в нём нечего.
+        virtual ColorAttachment colorAttachment() const { return {}; }   // eLoad + eStore
 
-        // nullopt   -> loadOp = eDontCare
-        virtual std::optional<vk::ClearValue> depthClearValue() const { return std::nullopt; }
-
-        // false -> в RenderingInfo не передаём depth-вложение вообще,
-        //          пайплайн прохода создаётся с depthAttachmentFormat = eUndefined
-        virtual bool usesDepth() const { return true; }
+        // nullopt -> pDepthAttachment = nullptr; пайплайн такого прохода
+        //            создаётся с depthAttachmentFormat = eUndefined
+        virtual std::optional<DepthAttachment> depthAttachment() const { return std::nullopt; }
 
         virtual void record(const FrameData& frameData) = 0;
 
@@ -259,24 +274,62 @@ namespace de {
 }
 ```
 
-Почему не `std::vector<vk::ClearValue>`, как было: вектор кодировал ту же информацию
-позиционно и неявно («0 — цвет, 1 — глубина, пусто — не чистить»). `GUIRenderPass::getClearValues()`
-возвращает `{}` (`DE_Gui.cpp:111–115`), и это работает только потому, что вложения его render pass'а
-объявлены `eLoad`/`eDontCare`. С `RenderingAttachmentInfo` load op берётся из вложения,
-и «пустой вектор» молча стал бы «очистить мусорным значением».
+**Почему структуры, а не `optional<vk::ClearValue>`.** Про вложение есть четыре вопроса: «есть ли
+оно», «чем чистить», «читать старое или затирать» (`loadOp`) и «сохранять ли результат»
+(`storeOp`). `optional<ClearValue>` отвечает только на первые два: `eDontCare` для `loadOp` не
+выражается, `storeOp` недостижим вообще и зашивается константой в `Renderer`. Это ровно та
+претензия, из-за которой отброшен вариант `bool usesDepth()` + `optional<ClearValue>
+depthClearValue()`: он не различал «вложения нет» и «вложение есть, но не чистить». Тип обязан
+различать состояния, а не дублировать уже выраженное.
 
-`MainRenderPass` (`DE_MainRenderPass.cpp:66–73`):
+**Почему цвет без `optional`, а глубина с ним.** Вопрос «а есть ли вложение цвета» у этого
+рендерера не задаётся: кадр всегда рисуется в образ swapchain'а, и `GUIRenderPass` тоже. У глубины
+же есть настоящее третье состояние — вложения нет совсем (`GUIRenderPass`; пайплайн imgui создан
+с `depthAttachmentFormat = eUndefined`), и выразить его `DepthAttachment` не может, только
+`nullopt`. Симметрия здесь не самоцель: одинаковой сделана *форма* описания, а не наличие
+`optional`.
+
+**Почему `clear` — не `optional<vk::ClearValue>`.** `loadOp` уже говорит, читается значение или
+нет; при `eLoad`/`eDontCare` `clearValue` игнорируется и драйвером, и валидацией. Второй
+`optional` внутри структуры добавит только два уровня проверки на месте использования.
+
+`MainRenderPass` (`DE_MainRenderPass.cpp:66–73`, `getClearValues` заменить):
 
 ```cpp
-std::optional<vk::ClearValue> MainRenderPass::colorClearValue() const {
-    return vk::ClearValue{}.setColor(std::array<float,4>{{0.f,0.f,0.f,1.f}});
+ColorAttachment MainRenderPass::colorAttachment() const {
+    ColorAttachment att;                       // по умолчанию eLoad + eStore
+    att.loadOp = vk::AttachmentLoadOp::eClear;
+    att.clear  = vk::ClearValue{}.setColor(std::array<float, 4>{{0.f, 0.f, 0.f, 1.f}});
+    return att;
 }
-std::optional<vk::ClearValue> MainRenderPass::depthClearValue() const {
-    return vk::ClearValue{}.setDepthStencil(vk::ClearDepthStencilValue{1.f, 0});
+
+std::optional<DepthAttachment> MainRenderPass::depthAttachment() const {
+    DepthAttachment att;                       // по умолчанию eLoad + eDontCare
+    att.loadOp = vk::AttachmentLoadOp::eClear; // storeOp не трогаем: после кадра глубина не нужна
+    att.clear  = vk::ClearValue{}.setDepthStencil({1.f, 0});
+    return att;
 }
 ```
 
-`GUIRenderPass` — оба `nullopt` и `usesDepth() == false`.
+`setColor`/`setDepthStencil` возвращают ссылку на временный `vk::ClearValue`; присваивание
+копирует его внутри того же выражения, поэтому здесь всё корректно. Грабли появляются, только
+если тянуть ссылку дальше: `const auto& cv = vk::ClearValue{}.setDepthStencil({1.f, 0});`.
+
+`GUIRenderPass` не переопределяет **ничего**: цвет по умолчанию `eLoad` + `eStore` — ровно то, что
+нужно второму проходу, глубина `nullopt`. `onSwapchainRecreation` (`DE_Gui.cpp:126–128`) остаётся
+как есть, тела `getClearValues()` (`DE_Gui.cpp:111–115`) больше нет.
+
+Итог по значениям:
+
+| Проход | `colorAttachment()` | `depthAttachment()` |
+|---|---|---|
+| `MainRenderPass` | `{eClear, eStore, {0,0,0,1}}` | `{eClear, eDontCare, {depth=1, stencil=0}}` |
+| `GUIRenderPass` | дефолт `{eLoad, eStore}` | `nullopt` |
+
+Инвариант, который эти структуры не проверяют: проход с глубиной ⇒ пайплайн создан с тем же
+`depthAttachmentFormat`; `nullopt` ⇒ `eUndefined`. Это второй шов дублирования после цветовых
+форматов, и лечится он только передачей владения `PipelineRenderingCreateInfo` проходу — на двух
+проходах это оверинжиниринг, см. §8.
 
 ### 3.5 `Renderer` — новый путь кадра
 
@@ -352,35 +405,29 @@ void Renderer::beginRendering(const FrameData& frameData, const RenderTarget& ta
     const auto& cmd = frameData.commandBuffer;
     const auto extent = target.getExtent();
 
-    vk::RenderingAttachmentInfo color{};
-    color.setImageView(target.getColorView(frameData.imageIndex))
-         .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
-         .setStoreOp(vk::AttachmentStoreOp::eStore);
-
-    if (const auto clear = pass.colorClearValue()) {
-        color.setLoadOp(vk::AttachmentLoadOp::eClear).setClearValue(*clear);
-    } else {
-        color.setLoadOp(vk::AttachmentLoadOp::eLoad);
-    }
+    const auto colorDesc = pass.colorAttachment();          // вложение цвета есть всегда
+    const auto color = vk::RenderingAttachmentInfo{}
+        .setImageView(target.getColorView(frameData.imageIndex))
+        .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
+        .setLoadOp(colorDesc.loadOp)
+        .setStoreOp(colorDesc.storeOp)
+        .setClearValue(colorDesc.clear);
 
     vk::RenderingAttachmentInfo depth{};
-    if (pass.usesDepth()) {
+    const auto depthDesc = pass.depthAttachment();
+    if (depthDesc) {
         depth.setImageView(target.getDepthView())
              .setImageLayout(vk::ImageLayout::eDepthAttachmentOptimal)
-             .setStoreOp(vk::AttachmentStoreOp::eDontCare);
-
-        if (const auto clear = pass.depthClearValue()) {
-            depth.setLoadOp(vk::AttachmentLoadOp::eClear).setClearValue(*clear);
-        } else {
-            depth.setLoadOp(vk::AttachmentLoadOp::eDontCare);
-        }
+             .setLoadOp(depthDesc->loadOp)
+             .setStoreOp(depthDesc->storeOp)
+             .setClearValue(depthDesc->clear);
     }
 
     cmd.beginRendering(vk::RenderingInfo{}
         .setRenderArea(vk::Rect2D{{0, 0}, extent})
         .setLayerCount(1)
         .setColorAttachments(color)
-        .setPDepthAttachment(pass.usesDepth() ? &depth : nullptr));
+        .setPDepthAttachment(depthDesc ? &depth : nullptr));
 
     cmd.setViewport(0, vk::Viewport{}
         .setX(0.f).setY(0.f)
@@ -391,9 +438,12 @@ void Renderer::beginRendering(const FrameData& frameData, const RenderTarget& ta
 }
 ```
 
-`setPDepthAttachment(&depth)` — указатель на локальную переменную; `beginRendering` читает её
-сразу, но если кто-то «сократит» до временного объекта прямо в цепочке вызовов, получится
-висячий указатель.
+`color` объявлен `const auto` — это полноценная копия результата цепочки сеттеров (сеттеры
+возвращают ссылку на временный объект, инициализация копирует его внутри того же выражения),
+поэтому `setColorAttachments(color)` безопасен. `setPDepthAttachment(&depth)` — указатель на
+локальную переменную; `beginRendering` читает её сразу, но если кто-то «сократит» до временного
+объекта прямо в цепочке вызовов, получится висячий указатель. Заодно: `clear` копируется в
+`RenderingAttachmentInfo` всегда, даже при `eLoad`/`eDontCare` — там он игнорируется.
 
 **`endRenderPass`** (`:206–211`) → `cmd.endRendering();`
 
@@ -601,7 +651,8 @@ struct FrameData {
 | Валидация: «pipeline was created with `VkPipelineRenderingCreateInfo`, but no rendering instance is active» | `beginRendering` не вызван (или вызван после `record`) | `Renderer::renderFrame` |
 | Валидация: формат вложения не совпадает с пайплайном | `setRenderingFormats` и `RenderingAttachmentInfo` с разными форматами; чаще всего SRGB против UNORM | `PipelineTraits` ↔ `Renderer::beginRendering` |
 | Экран чёрный/мерцает, валидация молчит | забыт переход в `PresentSrcKHR` перед `endFrame` | `renderFrame`, после цикла проходов |
-| Сцена пропала, видно только GUI | у второго прохода `loadOp = eClear` вместо `eLoad` | `GUIRenderPass::colorClearValue` |
+| Сцена пропала, видно только GUI | у второго прохода `loadOp = eClear` вместо `eLoad` | `GUIRenderPass` (должен остаться дефолтный `colorAttachment()`) |
+| Экран чёрный, ошибок нет | у главного прохода `storeOp = eDontCare` — результат не дошёл до present | `MainRenderPass::colorAttachment` |
 | Геометрия не рисуется, ошибок нет | не выставлены viewport/scissor после `beginRendering` | `Renderer::beginRendering` |
 | «A render pass instance must not be active» | вложенный `beginRendering` или забытый `endRendering` при `continue` в цикле | `renderFrame` |
 | Случайные значения clear, падения при старте кадра | `RenderingAttachmentInfo` для depth — временный объект, `pDepthAttachment` висит | `beginRendering` |
@@ -633,6 +684,12 @@ struct FrameData {
   Это отдельный пункт: там нужно разбираться, какая зависимость сейчас закрывает хазн
   между кадрами.
 - **Не заводить мини-рендер-граф.** Два прохода руками — правильный промежуточный уровень.
+- **Не тащить в `ColorAttachment`/`DepthAttachment` `imageView`, `imageLayout` или `vk::Extent2D`.**
+  Структуры описывают *политику* (что делать с вложением), а образы, вьюхи и размеры остаются
+  у `RenderTarget`/`Renderer`. Иначе проход начинает знать про swapchain, и `onSwapchainRecreation`
+  из `DE_MainRenderPass.cpp:109–112` разъезжается с тем, что проход уже успел закешировать.
+- **Не отдавать проходу владение `vk::PipelineRenderingCreateInfo`.** Это убрало бы последний шов
+  «формат вложения ↔ формат пайплайна», но на два прохода цена выше выгоды (см. конец §3.4).
 - **Не держать `#ifdef DE_LEGACY_RENDERPASS`.** Два пути отрисовки разъедутся по переходам
   быстрее, чем помогут; откат — это git, а не `#ifdef`.
 
