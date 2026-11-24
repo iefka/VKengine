@@ -20,7 +20,7 @@
 |---|---|---|---|
 | **A** | включить фичи в `featuresChainEnable` | нет | 5 строк |
 | **B** | переключить отрисовку: `beginRendering`, пайплайны без render pass, imgui | да, целиком и атомарно | ~8 файлов |
-| **C** | удалить `RenderPass`, `RenderTarget`, framebuffer'ы, `renderPass_` из `Renderer` и `Swapchain` | нет | ~10 файлов, механически |
+| **C** | удалить `RenderPass`, framebuffer'ы, `renderPass_` из `Renderer` и `Swapchain`, `preRecord` | нет | ~10 файлов, механически |
 | **D** | `FrameData::extent`, разрыв `MainRenderPass → Renderer` | нет | 4 файла |
 
 **Почему B нельзя разрезать.** Пайплайн, созданный с `renderPass != nullptr`, несовместим
@@ -33,6 +33,11 @@
 и оно безопасно ровно потому, что B уже работает. Если начать с удаления, получится каскад
 (`Swapchain::getFrameBuffer` → `RenderTarget::getFramebuffer` → `SwapchainRenderTarget` →
 `GUIRenderTarget` → `Application`) поверх атомарного коммита.
+
+**Почему `RenderTarget` при этом умирает уже в B.** Он не «мёртвый код после B» — он мешает его
+написать: `beginRendering` нужны образ и вьюха, и брать их из интерфейса, единственным содержимым
+которого были framebuffer и render pass, нечего. Файл удаляется в B, четыре геттера уезжают
+в `Swapchain` — см. §3.6.
 
 ---
 
@@ -95,10 +100,11 @@ DE_ASSERT(logicalDevice.getProcAddr("vkCmdBeginRendering") != nullptr);
 | `DE_Renderer.cpp:159–184` | `beginRenderPass` (clear values, viewport, scissor) | → `beginRendering` | — |
 | `DE_Renderer.cpp:206–211` | `endRenderPass` | → `endRendering` | — |
 | `DE_Renderer.cpp:145–157` | `beginFrame` (acquire, `commandBuffer.begin`) | + переходы в начале кадра | — |
-| `DE_Renderer.hpp:27–45` | `SwapchainRenderTarget` — прокси в `Swapchain` | + 4 геттера вьюх | удалить |
-| `DE_Renderer.hpp:85–88` | `getSwapchainRenderTarget`, `getMainRenderPass{,Ptr}` | — | удалить |
+| `DE_Renderer.hpp:27–45` | `SwapchainRenderTarget` — прокси в `Swapchain` | удалить вместе с `RenderTarget` | — |
+| `DE_RenderTarget.hpp:9–19` | `RenderTarget`: `getFramebuffer`, `getRenderPass`, `getExtent` | удалить файл, геттеры → в `Swapchain` (§3.6) | — |
+| `DE_Renderer.hpp:85–88` | `getSwapchainRenderTarget`, `getMainRenderPass{,Ptr}` | `getSwapchainRenderTarget` удалить | `getMainRenderPass{,Ptr}` удалить |
 | `DE_Renderer.hpp:114` | член `unique_ptr<RenderPass>` | — | удалить |
-| `DE_IRenderPass.hpp:14–18` | `getClearValues`, `getRenderTarget`, `preRecord`, `onSwapchainRecreation` | `getClearValues` → `ColorAttachment` + `optional<DepthAttachment>`, `getRenderTarget` оставить до C | остальное удалить |
+| `DE_IRenderPass.hpp:14–18` | `getClearValues`, `getRenderTarget`, `preRecord`, `onSwapchainRecreation` | вложения (§3.4); `getRenderTarget` удалить | `preRecord`, `onSwapchainRecreation` удалить |
 | `core/DE_PassContext.hpp:10–11` | `renderPass`, `frameBuffer` | → `colorFormat`, `depthFormat` | — |
 | `DE_PipelineTraits.hpp:159,212,229,252` | `setRenderPass`/`getRenderPass`/член/передача | → `PipelineRenderingCreateInfo` | — |
 | `DE_RenderSystem.cpp:157`, `PointLightSystem.cpp:114`, `SkyBoxSystem.cpp:101` | `.setRenderPass(*renderPass_->getRenderPass())` | → `.setRenderingFormats(...)` | — |
@@ -106,7 +112,7 @@ DE_ASSERT(logicalDevice.getProcAddr("vkCmdBeginRendering") != nullptr);
 | `DE_Swapchain.hpp:113,115,123,133` | `getFrameBuffer`, `getRenderPass`, член, `framebuffers_` | + 4 геттера | удалить |
 | `DE_Gui.cpp:39–56` | свой `RenderPass` для GUI | без изменений | удалить |
 | `DE_Gui.cpp:84–91` | imgui `initInfo` с `RenderPass` | → dynamic | — |
-| `DE_MainRenderPass.cpp:66–73` | clear values + `getRenderTarget` | `getClearValues` → `colorAttachment`/`depthAttachment` | `getRenderTarget` удалить |
+| `DE_MainRenderPass.cpp:66–73` | clear values + `getRenderTarget` | `getClearValues` → вложения (§3.4), `getRenderTarget` удалить | — |
 | `DE_Application.cpp:341–344` | `passContext_.renderPass = getMainRenderPassPtr()` | → форматы | — |
 
 Глубина `eD32Sfloat` сейчас захардкожена в трёх местах: `DE_Renderer.cpp:22`,
@@ -240,7 +246,6 @@ viewport и scissor у тебя динамические, а после `beginRe
 
 namespace de {
     struct FrameData;
-    class RenderTarget;
 
     struct ColorAttachment {
         vk::AttachmentLoadOp  loadOp  = vk::AttachmentLoadOp::eLoad;    // eClear | eLoad | eDontCare
@@ -267,9 +272,6 @@ namespace de {
         virtual std::optional<DepthAttachment> depthAttachment() const { return std::nullopt; }
 
         virtual void record(const FrameData& frameData) = 0;
-
-        // удаляется в коммите C
-        virtual const RenderTarget& getRenderTarget() const = 0;
     };
 }
 ```
@@ -299,7 +301,7 @@ depthClearValue()`: он не различал «вложения нет» и «
 | Поле | Чей | Почему не прохода |
 |---|---|---|
 | `loadOp`, `storeOp`, `clearValue` | прохода | это и есть политика |
-| `imageView` | `RenderTarget` / swapchain | зависит от `frameData.imageIndex`, меняется каждый кадр |
+| `imageView` | `Swapchain` (`images_`/`imageViews_`) | зависит от `frameData.imageIndex`, меняется каждый кадр |
 | `imageLayout` | дисциплина переходов `Renderer` | следует из барьера в `beginFrame` (§3.5), а не из желания прохода |
 
 Готовая структура требует, чтобы проход знал два чужих источника, и подпись становится
@@ -316,7 +318,7 @@ depthClearValue()`: он не различал «вложения нет» и «
 2. `imageLayout = eGeneral` «на всякий случай» — барьер перевёл образ в `eColorAttachmentOptimal`,
    `beginRendering` объявил `eGeneral` → тот же VUID;
 3. MSAA/resolve: поля `resolveMode`/`resolveImageView` начинают правиться в проходе, хотя `samples` —
-   свойство `PassContext`/`RenderTarget`.
+   свойство `PassContext`/`Swapchain`.
 
 Разделение простое: проход описывает **политику**, `RenderingAttachmentInfo` — уже собранное
 значение, и собирает его `beginRendering`, потому что только он знает `imageIndex` и целевые layout'ы.
@@ -392,14 +394,14 @@ void Renderer::transitionImage(vk::CommandBuffer cmd, vk::Image image,
 1. `beginFrame()`, сразу после `commandBuffer.begin(...)` (`DE_Renderer.cpp:149`):
 
 ```cpp
-transitionImage(commandBuffer, target.getColorImage(imageIndex),
+transitionImage(commandBuffer, swapchain_->getColorImage(imageIndex),
     vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
     vk::PipelineStageFlagBits::eTopOfPipe, {},
     vk::PipelineStageFlagBits::eColorAttachmentOutput,
     vk::AccessFlagBits::eColorAttachmentWrite,
     vk::ImageAspectFlagBits::eColor);
 
-transitionImage(commandBuffer, target.getDepthImage(),
+transitionImage(commandBuffer, swapchain_->getDepthImage(),
     vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthAttachmentOptimal,
     vk::PipelineStageFlagBits::eTopOfPipe, {},
     vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eLateFragmentTests,
@@ -414,7 +416,7 @@ transitionImage(commandBuffer, target.getDepthImage(),
 2. `renderFrame()`, после цикла проходов и до `endFrame()`:
 
 ```cpp
-transitionImage(frame.commandBuffer, target.getColorImage(frame.imageIndex),
+transitionImage(frame.commandBuffer, swapchain_->getColorImage(frame.imageIndex),
     vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
     vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::AccessFlagBits::eColorAttachmentWrite,
     vk::PipelineStageFlagBits::eBottomOfPipe, {},
@@ -438,21 +440,24 @@ transitionImage(frame.commandBuffer, target.getColorImage(frame.imageIndex),
    sync1 и четыре вызова; в отдельном коммите меняется только тело хелпера. Если что-то мигнёт,
    `git revert` этого коммита возвращает рабочее состояние, не трогая dynamic rendering.
 
-**`beginRendering`** вместо `beginRenderPass` (`:159–184`):
+**`beginRendering`** вместо `beginRenderPass` (`:159–184`). Параметра `target` нет: `RenderTarget`
+удалён (§3.6), цель — член `swapchain_`; если обращений несколько, в начале функции удобно
+`auto& sc = *swapchain_;`.
 
 ```cpp
-void Renderer::beginRendering(const FrameData& frameData, const RenderTarget& target, IRenderPass& pass)
+void Renderer::beginRendering(const FrameData& frameData, IRenderPass& pass)
 {
     if (!isFrameStarted_) {
         throw std::runtime_error("beginRendering called outside of a frame");
     }
 
+    auto& sc = *swapchain_;
     const auto& cmd = frameData.commandBuffer;
-    const auto extent = target.getExtent();
+    const auto extent = sc.getSwapchainExtent();
 
     const auto colorDesc = pass.colorAttachment();          // вложение цвета есть всегда
     const auto color = vk::RenderingAttachmentInfo{}
-        .setImageView(target.getColorView(frameData.imageIndex))
+        .setImageView(sc.getColorView(frameData.imageIndex))
         .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
         .setLoadOp(colorDesc.loadOp)
         .setStoreOp(colorDesc.storeOp)
@@ -461,7 +466,7 @@ void Renderer::beginRendering(const FrameData& frameData, const RenderTarget& ta
     vk::RenderingAttachmentInfo depth{};
     const auto depthDesc = pass.depthAttachment();
     if (depthDesc) {
-        depth.setImageView(target.getDepthView())
+        depth.setImageView(sc.getDepthView())
              .setImageLayout(vk::ImageLayout::eDepthAttachmentOptimal)
              .setLoadOp(depthDesc->loadOp)
              .setStoreOp(depthDesc->storeOp)
@@ -496,7 +501,7 @@ void Renderer::beginRendering(const FrameData& frameData, const RenderTarget& ta
 
 ```cpp
 for (auto& pass : passes_) {
-    beginRendering(frame, pass->getRenderTarget(), *pass);
+    beginRendering(frame, *pass);
     pass->record(frame);
     endRendering(frame);
 }
@@ -504,39 +509,62 @@ for (auto& pass : passes_) {
 
 `preRecord` не вызываем — ни один проход его не переопределяет.
 
-### 3.6 `RenderTarget` — аддитивно, чтобы не тянуть коммит C в B
+### 3.6 `RenderTarget` — удаляется здесь же, четыре геттера уезжают в `Swapchain`
 
-Добавить в `DE_RenderTarget.hpp` четыре чистых виртуальных:
+`RenderTarget` (`DE_RenderTarget.hpp:9–19`) держал ровно три вещи: `getFramebuffer`, `getRenderPass`,
+`getExtent`. Первых двух после B не существует, `getExtent` — это `Swapchain::currentExtent_`.
+То есть от интерфейса остаются два наследника (`SwapchainRenderTarget` в `DE_Renderer.hpp:27–45` и
+`GUIRenderTarget` в `DE_Gui.hpp:21–35`), которые пробрасывают вызовы в один и тот же `Swapchain`:
+слой без собственного состояния. Значит, файл удаляется **в B**, а нужные рендереру данные берутся
+прямо из swapchain.
 
-```cpp
-virtual vk::Image     getColorImage(uint32_t imageIndex) const = 0;
-virtual vk::ImageView getColorView(uint32_t imageIndex) const = 0;
-virtual vk::Image     getDepthImage() const = 0;
-virtual vk::ImageView getDepthView() const = 0;
-```
+Аддитивного варианта («оживить `RenderTarget` на один коммит, удалить в C») здесь нет: чтобы
+`beginRendering` собрал `RenderingAttachmentInfo`, ему нужны образ и вьюха, а держать их
+в интерфейсе ради удаления следующим коммитом — это ровно тот слой, который ревизия и убирает.
 
-`getFramebuffer`/`getRenderPass` пока оставить — их удалит C.
-
-`SwapchainRenderTarget` (`DE_Renderer.hpp:34–42`) и `GUIRenderTarget` (`DE_Gui.cpp:17–25`)
-пробрасывают всё в `Swapchain`, поэтому в самом `Swapchain` нужно добавить четыре геттера.
-Образов swapchain'а он сейчас не хранит (только `imageViews_`), значит:
+**Что добавить в `Swapchain`.** Образов он сейчас не хранит (только `imageViews_`), поэтому
+в конструкторе после `getSwapchainImagesKHR`:
 
 ```cpp
 // DE_Swapchain.hpp, private
 std::vector<vk::Image> images_;
 
-// DE_Swapchain.cpp, в конструкторе, после createSwapchainKHRUnique:
+// в конструкторе
 images_ = logicalDevice.getSwapchainImagesKHR(*swapchain_);
-```
 
-```cpp
+// public
 vk::Image     getColorImage(uint32_t i) const { return images_.at(i); }
 vk::ImageView getColorView(uint32_t i)  const { return *imageViews_.at(i); }
 vk::Image     getDepthImage()           const { return *depthImage_.image; }
 vk::ImageView getDepthView()            const { return *depthImageView_; }
 ```
 
-Эти четыре геттера останутся в C, остальное из `Swapchain` уйдёт.
+`getSwapchainExtent()` уже есть. `getFrameBuffer`/`getRenderPass`/`framebuffers_` пока остаются —
+их снимет C (§4.2), это отдельная механическая правка. `vk::Image` и `vk::ImageView` не
+взаимозаменяемы: барьеру нужен образ, `RenderingAttachmentInfo` — вьюха, отсюда обе пары геттеров.
+
+**Где `Renderer` берёт цель.** Нигде — у него есть член `std::optional<Swapchain> swapchain_`.
+Поэтому `beginRendering(const FrameData&, IRenderPass&)`, а внутри `sc.getColorView(imageIndex)`;
+параметр `const RenderTarget& target` не появляется ни на одном шаге.
+
+**Что должно уехать вместе с файлом** — это те места, где `RenderTarget` ещё упоминается, и без их
+правки B просто не соберётся:
+
+| Место | Что там | Куда |
+|---|---|---|
+| `DE_IRenderPass.hpp:3` | `#include"DE_RenderTarget.hpp"` | удалить |
+| `DE_MainRenderPass.hpp:37`, `.cpp:71–73` | `getRenderTarget() const override` | удалить (`override` без базового виртуального = ошибка) |
+| `DE_Gui.hpp:21–35`, `:58` | `class GUIRenderTarget`, член `renderTarget_` | удалить |
+| `DE_Gui.cpp:17–27` | `GUIRenderTarget::getFramebuffer/getRenderPass/getExtent` | удалить |
+| `DE_Gui.cpp:58` | `renderTarget_.rebind(renderer_.getSwapchain(), *this)` | удалить |
+| `DE_Gui.cpp:117–119` | `GUIRenderPass::getRenderTarget` | удалить |
+| `DE_Gui.cpp:126–128` | `onSwapchainRecreation` — внутри только `rebind` | удалить вместе с хуком |
+| `DE_Renderer.hpp:41`, `.cpp:159` | `beginRenderPass(..., const RenderTarget&, clearValues)` | → `beginRendering(const FrameData&, IRenderPass&)` |
+| `DE_Renderer.cpp:42,105` | `swapchainTarget_.rebind(*swapchain_)` | удалить, члена больше нет |
+| `DE_Renderer.cpp:198` | `beginRenderPass(frame, pass->getRenderTarget(), ...)` | → `beginRendering(frame, *pass)` |
+
+`MainRenderPass` продолжает брать `extent` у `Renderer` (`DE_MainRenderPass.cpp:87–90`) до коммита D
+(§5) — это отдельная зависимость, к `RenderTarget` отношения не имеет.
 
 ### 3.7 imgui, `DE_Gui.cpp:84–91`
 
@@ -595,7 +623,9 @@ backend сам `vkCmdBeginRendering` не вызывает, это провер�
 - приложение запускается, картинка на 1200×1000 визуально та же;
 - ноль ошибок валидации;
 - ресайз окна не ломается (переходы выполняются каждый кадр заново);
-- `Select-String -Path src\*.cpp,src\Systems\*.cpp -Pattern "setRenderPass\("` — пусто.
+- `Select-String -Path src\*.cpp,src\Systems\*.cpp -Pattern "setRenderPass\("` — пусто;
+- `git grep -n "RenderTarget" -- src` — пусто (файл и оба прокси ушли в этом же коммите, §3.6);
+- `git grep -n "renderPass\.begin\|beginRenderPass(" -- src` — пусто.
 
 ---
 
@@ -632,51 +662,27 @@ Swapchain::Builder{ device_, *renderPass_ }   →   Swapchain::Builder{ device_ 
 
 - `:114` член `std::unique_ptr<RenderPass> renderPass_` — удалить;
 - `:87–88` `getMainRenderPass`, `getMainRenderPassPtr` — удалить;
-- `:15` forward-декларация `class RenderPass` и `#include "DE_RenderPass.hpp"` — удалить;
-- `SwapchainRenderTarget` (`:27–45`) и член `swapchainTarget_` (`:104`),
-  `getSwapchainRenderTarget()` (`:85`) — удалить.
+- `:15` forward-декларация `class RenderPass` и `#include "DE_RenderPass.hpp"` — удалить.
 
-### 4.4 `RenderTarget` и проходы
+`SwapchainRenderTarget` (`:27–45`), член `swapchainTarget_` (`:104`) и
+`getSwapchainRenderTarget()` (`:85`) уже удалены в B вместе с `RenderTarget` (§3.6).
 
-- `DE_RenderTarget.hpp` — удалить (после C у него не остаётся содержимого:
-  framebuffer'ов и render pass'ов нет, а `extent`/вьюхи берутся прямо из `Swapchain`);
-- `GUIRenderTarget` (`DE_Gui.hpp:21–37`), `GUIRenderTarget::renderTarget_`, `rebind`
-  (`DE_Gui.cpp:58`) — удалить;
-- `IRenderPass::getRenderTarget()` — удалить; вместе с ним уходит **параметр `target`** у
-  `beginRendering`: в B он был нужен, потому что проходы отдавали разные `RenderTarget`, а после C
-  источник один — член `Renderer::swapchain_`;
-- `IRenderPass::preRecord`, `onSwapchainRecreation` — удалить;
-  `MainRenderPass::onSwapchainRecreation` (`:109–112`) и `GUIRenderPass::onSwapchainRecreation`
-  (`:126–128`) — удалить;
+### 4.4 Проходы
+
+`RenderTarget` и оба прокси уже удалены в B (§3.6), здесь про них вспоминать нечего. Остаётся:
+
+- `IRenderPass::preRecord`, `onSwapchainRecreation` — удалить; ни один проход не переопределяет
+  первый, а второй нужен был только чтобы перепривязать `renderTarget_`;
+- `MainRenderPass::onSwapchainRecreation` (`:109–112`) — удалить;
 - `DE_RenderPass.hpp/cpp` — удалить файлы;
 - `GUIRenderPass::getRenderPass` (`DE_Gui.cpp:130–133`), член `renderPass_`, его создание
-  (`:39–56`) — удалить;
-- `MainRenderPass::getRenderTarget` (`:71–73`) — удалить;
+  (`:39–56`) — удалить; `getClearValues` заменяется вложениями ещё в B (§3.4);
 - `unregisterPass`, `unregisterCompute` (`DE_Renderer.hpp:73,80`) — удалить, не вызываются.
 
-Подпись и цикл после C:
-
-```cpp
-void Renderer::beginRendering(const FrameData& frameData, IRenderPass& pass);   // target — из swapchain_
-
-for (auto& pass : passes_) {
-    beginRendering(frame, *pass);
-    pass->record(frame);
-    endRendering(frame);
-}
-```
-
-Внутри: `swapchain_->getColorView(frameData.imageIndex)`, `swapchain_->getDepthView()`,
-`swapchain_->getExtent()`. В коммите D последний вызов меняется на `frameData.extent` — и после
-этого `beginRendering` вообще перестаёт спрашивать swapchain про размер.
-
-**Почему `RenderTarget` не заменяется ничем.** Интерфейс существовал ровно для одного вопроса —
-«из чего собрать `VkFramebuffer`» (`getFramebuffer`, `getRenderPass`, `extent`), и для того, чтобы
-`beginRenderPass` не различал swapchain и GUI. Ни framebuffer'а, ни render pass'а больше нет;
-остаётся «какой `imageView` и какой `extent` на этот кадр» — это собственное состояние
-`Swapchain`, и прокси-слой между ними ничего не добавляет. Второй потребитель тоже исчез:
-`GUIRenderTarget` был отдельным `RenderTarget` только потому, что GUI собирал свой `VkRenderPass`;
-после C оба прохода рисуют в тот же swapchain, и различаются они ровно вложениями (§3.4).
+**Чего здесь нет и почему.** Соблазн завести обратно «абстракцию цели» (интерфейс с вьюхами,
+чтобы когда-нибудь нарисовать в off-screen образ) стоит отложить до первого такого прохода: тогда
+вернётся не интерфейс ради интерфейса, а конкретный владелец образов, и `beginRendering` получит
+параметр. Пока цель одна — swapchain, и она уже член `Renderer`.
 
 ### 4.5 Приёмка C
 
@@ -707,7 +713,7 @@ struct FrameData {
 };
 ```
 
-`beginFrame` (`:151–155`) заполняет `target.getExtent()`; `MainRenderPass::record` берёт
+`beginFrame` (`:151–155`) заполняет `swapchain_->getSwapchainExtent()`; `MainRenderPass::record` берёт
 `frameData.extent`. После этого `Renderer&` в `MainRenderPass` нужен только за
 `framesInFlight` в конструкторе — его можно взять из `PassContext`.
 
@@ -756,7 +762,7 @@ struct FrameData {
 - **Не заводить мини-рендер-граф.** Два прохода руками — правильный промежуточный уровень.
 - **Не тащить в `ColorAttachment`/`DepthAttachment` `imageView`, `imageLayout` или `vk::Extent2D`.**
   Структуры описывают *политику* (что делать с вложением), а образы, вьюхи и размеры остаются
-  у `RenderTarget`/`Renderer`. Иначе проход начинает знать про swapchain, и `onSwapchainRecreation`
+  у `Swapchain`/`Renderer`. Иначе проход начинает знать про swapchain, и `onSwapchainRecreation`
   из `DE_MainRenderPass.cpp:109–112` разъезжается с тем, что проход уже успел закешировать.
 - **Не отдавать проходу владение `vk::PipelineRenderingCreateInfo`.** Это убрало бы последний шов
   «формат вложения ↔ формат пайплайна», но на два прохода цена выше выгоды (см. конец §3.4).
