@@ -421,6 +421,23 @@ transitionImage(frame.commandBuffer, target.getColorImage(frame.imageIndex),
     vk::ImageAspectFlagBits::eColor);
 ```
 
+**Почему не `Barrier2` сразу.** `synchronization2` уже включён в A, то есть `vk::ImageMemoryBarrier2`
+доступен в B без всякой подготовки, и dynamic rendering его **не требует** — `vkCmdBeginRendering`
+спокойно живёт на `vkCmdPipelineBarrier`. Отложено по трём причинам:
+
+1. **В B переходы — новый код, а не перенос.** Раньше их делал `VkRenderPass` неявно
+   (`initialLayout`/`finalLayout` + `subpassDependency`), теперь они пишутся руками, и первый
+   прогон — это отладка «правильные ли стадии/маски/аспекты». Если в том же коммите сменить API,
+   у сломанной картинки появляются две неразличимые гипотезы: неверный барьер или неверное
+   переписывание маски. Бисект между ними уже не сделать.
+2. **Переписывание выглядит механическим, но таким не является.** В `ImageMemoryBarrier2` стадии
+   уезжают внутрь барьера и меняют тип на `PipelineStageFlags2`/`AccessFlags2`; «1:1» отображение
+   (`eTopOfPipe`, `eBottomOfPipe`, `eAllCommands`) — ровно то место, где тихо ломают
+   синхронизацию, и глазами в общем диффе это не ловится.
+3. **Цена откладывания нулевая, диф — 20 строк.** В B пишется один хелпер `transitionImage` на
+   sync1 и четыре вызова; в отдельном коммите меняется только тело хелпера. Если что-то мигнёт,
+   `git revert` этого коммита возвращает рабочее состояние, не трогая dynamic rendering.
+
 **`beginRendering`** вместо `beginRenderPass` (`:159–184`):
 
 ```cpp
@@ -625,8 +642,9 @@ Swapchain::Builder{ device_, *renderPass_ }   →   Swapchain::Builder{ device_ 
   framebuffer'ов и render pass'ов нет, а `extent`/вьюхи берутся прямо из `Swapchain`);
 - `GUIRenderTarget` (`DE_Gui.hpp:21–37`), `GUIRenderTarget::renderTarget_`, `rebind`
   (`DE_Gui.cpp:58`) — удалить;
-- `IRenderPass::getRenderTarget()` — удалить; `beginRendering` берёт `const Swapchain&`
-  напрямую (его даёт `Renderer`);
+- `IRenderPass::getRenderTarget()` — удалить; вместе с ним уходит **параметр `target`** у
+  `beginRendering`: в B он был нужен, потому что проходы отдавали разные `RenderTarget`, а после C
+  источник один — член `Renderer::swapchain_`;
 - `IRenderPass::preRecord`, `onSwapchainRecreation` — удалить;
   `MainRenderPass::onSwapchainRecreation` (`:109–112`) и `GUIRenderPass::onSwapchainRecreation`
   (`:126–128`) — удалить;
@@ -635,6 +653,30 @@ Swapchain::Builder{ device_, *renderPass_ }   →   Swapchain::Builder{ device_ 
   (`:39–56`) — удалить;
 - `MainRenderPass::getRenderTarget` (`:71–73`) — удалить;
 - `unregisterPass`, `unregisterCompute` (`DE_Renderer.hpp:73,80`) — удалить, не вызываются.
+
+Подпись и цикл после C:
+
+```cpp
+void Renderer::beginRendering(const FrameData& frameData, IRenderPass& pass);   // target — из swapchain_
+
+for (auto& pass : passes_) {
+    beginRendering(frame, *pass);
+    pass->record(frame);
+    endRendering(frame);
+}
+```
+
+Внутри: `swapchain_->getColorView(frameData.imageIndex)`, `swapchain_->getDepthView()`,
+`swapchain_->getExtent()`. В коммите D последний вызов меняется на `frameData.extent` — и после
+этого `beginRendering` вообще перестаёт спрашивать swapchain про размер.
+
+**Почему `RenderTarget` не заменяется ничем.** Интерфейс существовал ровно для одного вопроса —
+«из чего собрать `VkFramebuffer`» (`getFramebuffer`, `getRenderPass`, `extent`), и для того, чтобы
+`beginRenderPass` не различал swapchain и GUI. Ни framebuffer'а, ни render pass'а больше нет;
+остаётся «какой `imageView` и какой `extent` на этот кадр» — это собственное состояние
+`Swapchain`, и прокси-слой между ними ничего не добавляет. Второй потребитель тоже исчез:
+`GUIRenderTarget` был отдельным `RenderTarget` только потому, что GUI собирал свой `VkRenderPass`;
+после C оба прохода рисуют в тот же swapchain, и различаются они ровно вложениями (§3.4).
 
 ### 4.5 Приёмка C
 
