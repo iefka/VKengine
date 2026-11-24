@@ -293,6 +293,34 @@ depthClearValue()`: он не различал «вложения нет» и «
 нет; при `eLoad`/`eDontCare` `clearValue` игнорируется и драйвером, и валидацией. Второй
 `optional` внутри структуры добавит только два уровня проверки на месте использования.
 
+**Почему не отдавать сразу `vk::RenderingAttachmentInfo`.** Технически можно, и собралось бы. Но в
+этой структуре смешаны три источника, а проход владеет только одним:
+
+| Поле | Чей | Почему не прохода |
+|---|---|---|
+| `loadOp`, `storeOp`, `clearValue` | прохода | это и есть политика |
+| `imageView` | `RenderTarget` / swapchain | зависит от `frameData.imageIndex`, меняется каждый кадр |
+| `imageLayout` | дисциплина переходов `Renderer` | следует из барьера в `beginFrame` (§3.5), а не из желания прохода |
+
+Готовая структура требует, чтобы проход знал два чужих источника, и подпись становится
+`colorAttachment(vk::ImageView colorView, vk::ImageLayout layout)` — два параметра, чтобы подставить
+их в поля. Заодно в каждом проходе появляется место, где кадр ломается одним неверным `layout`, а
+`pNext` в структуре, возвращаемой по значению, — висячий указатель на стек прохода без единого
+предупреждения компилятора.
+
+Конкретные поломки, которые наша форма не даёт завести:
+
+1. вьюха закеширована в конструкторе прохода (`getColorView(0)`) — кадр уезжает не в тот образ;
+   валидация ругается не на «чужой образ», а на `VUID-vkCmdDraw-None-09600` (образ уже в
+   `ePresentSrcKHR`, объявлен `eColorAttachmentOptimal`);
+2. `imageLayout = eGeneral` «на всякий случай» — барьер перевёл образ в `eColorAttachmentOptimal`,
+   `beginRendering` объявил `eGeneral` → тот же VUID;
+3. MSAA/resolve: поля `resolveMode`/`resolveImageView` начинают правиться в проходе, хотя `samples` —
+   свойство `PassContext`/`RenderTarget`.
+
+Разделение простое: проход описывает **политику**, `RenderingAttachmentInfo` — уже собранное
+значение, и собирает его `beginRendering`, потому что только он знает `imageIndex` и целевые layout'ы.
+
 `MainRenderPass` (`DE_MainRenderPass.cpp:66–73`, `getClearValues` заменить):
 
 ```cpp
