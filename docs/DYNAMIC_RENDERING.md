@@ -581,20 +581,53 @@ initInfo.PipelineInfoMain.RenderPass = nullptr;
 initInfo.PipelineInfoMain.Subpass = 0;
 initInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 initInfo.PipelineInfoMain.PipelineRenderingCreateInfo = VkPipelineRenderingCreateInfo{
-    .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-    .pNext = nullptr,
-    .viewMask = 0,
-    .colorAttachmentCount = 1,
-    .pColorAttachmentFormats = &colorFormat,
+    .sType                    = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+    .pNext                    = nullptr,
+    .viewMask                 = 0,
+    .colorAttachmentCount     = 1,
+    .pColorAttachmentFormats  = &colorFormat,
+    .depthAttachmentFormat    = VK_FORMAT_UNDEFINED,   // GUI рисуется без глубины
+    .stencilAttachmentFormat  = VK_FORMAT_UNDEFINED,
 };
 ```
+
+`depthAttachmentFormat` здесь **не «забыт», а обязан быть `VK_FORMAT_UNDEFINED`**: это парная
+половина решения `GUIRenderPass::depthAttachment() == nullopt` (§3.4). Обе половины проверяются
+вместе при отрисовке (`VUID-vkCmdDraw-None-08971/08972/08973` — цвет, глубина, стенсиль):
+
+| Пайплайн объявляет depth | `pDepthAttachment` в `beginRendering` | Результат |
+|---|---|---|
+| `eUndefined` | `nullptr` | верно (наш GUI) |
+| `kDepthFormat` | образ глубины с тем же форматом | верно (наш main) |
+| `eUndefined` | образ передан | ошибка валидации на первом draw |
+| `kDepthFormat` | `nullptr` | ошибка валидации на первом draw |
+
+`VkPipelineRenderingCreateInfo` зануляется при инициализации (недостающие десигнаторы = 0), а
+`VK_FORMAT_UNDEFINED` — это и есть 0, так что строку можно и не писать. Писать стоит: через полгода
+вопрос «а где тут глубина?» возникает гарантированно, и ответ должен быть в коде, а не в памяти.
+
+Почему GUI обходится без глубины: пайплайн imgui создаётся с занулённым
+`VkPipelineDepthStencilStateCreateInfo` (`imgui_impl_vulkan.cpp:1070–1071`), то есть
+`depthTestEnable = depthWriteEnable = VK_FALSE`. Раньше у GUI был свой `VkRenderPass`
+с depth-вложением `eDontCare`/`eDontCare` (`DE_Gui.cpp:39–56`) — render pass умеет говорить
+«вложение есть, но не трогай»; dynamic rendering так не умеет, вложение либо приложено, либо нет.
+Приложить ту же глубину (`{eLoad, eDontCare}` + `kDepthFormat` в пайплайне) имеет смысл только если
+imgui начнёт с ней сравнивать — сейчас он её не читает, а это лишний барьер и лишняя пара
+«формат в пайплайне ↔ формат вложения».
+
+`colorAttachmentCount = 1` должен совпадать с тем, что реально передаётся в `RenderingInfo`
+(`beginRendering` передаёт ровно один цвет, §3.5), а `MSAASamples` — с реальным числом сэмплов
+образов swapchain'а (`e1`). Расхождение — снова ошибка на draw, а не на создании пайплайна.
 
 Четыре вещи, которые здесь важны:
 
 1. **`sType` надо выставить руками.** У `vk::PipelineRenderingCreateInfo` `sType` заполняется
    конструктором, у C-структуры — нет. Backend проверяет его ассертом:
    `PipelineRenderingCreateInfo::sType must be VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR`
-   (`imgui_impl_vulkan.cpp:1106`). С нулём в `sType` main-пайплайн imgui просто не создастся.
+   (`imgui_impl_vulkan.cpp:1106`). В Release, где ассертов нет, это происходит **тихо**:
+   `ImGui_ImplVulkan_Init` смотрит на `sType` только чтобы решить, создавать ли main-пайплайн
+   (`:1238`), пайплайн не создаётся — GUI просто невидим, а `vkCmdBindPipeline(VK_NULL_HANDLE)`
+   ловится уже на отрисовке. Заодно `pNext` обязан быть `nullptr` (ассерт `:1107`).
 2. **`setColorAttachmentFormats(...)` здесь недоступен** — это сеттер `vk::`-обёртки. Можно
    присвоить `vk::PipelineRenderingCreateInfo` целиком (у него есть оператор приведения к
    C-структуре), но тогда `pColorAttachmentFormats` будет указывать на внутренний массив
@@ -733,6 +766,8 @@ struct FrameData {
 | «A render pass instance must not be active» | вложенный `beginRendering` или забытый `endRendering` при `continue` в цикле | `renderFrame` |
 | Случайные значения clear, падения при старте кадра | `RenderingAttachmentInfo` для depth — временный объект, `pDepthAttachment` висит | `beginRendering` |
 | imgui рисует пустоту или падает на первом кадре | `PipelineInfoMain.RenderPass` не `nullptr` либо вызван без активного rendering | `DE_Gui.cpp:84–91` |
+| GUI невидим, картинка сцены цела, ошибок нет | `PipelineRenderingCreateInfo.sType == 0` → backend не создал main-пайплайн (`imgui_impl_vulkan.cpp:1238`), пайплайн так и остался `VK_NULL_HANDLE` | `DE_Gui.cpp:84–91` |
+| Валидация на первом draw GUI: «depth attachment has wrong format / not present» | пары разъехались: `depthAttachmentFormat` в пайплайне против `pDepthAttachment` в `beginRendering` (§3.7) | `DE_Gui.cpp:84–91` ↔ `Renderer::beginRendering` |
 
 ---
 
