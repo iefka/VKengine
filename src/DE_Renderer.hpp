@@ -38,12 +38,11 @@ namespace de {
 
 		std::optional<FrameData> beginFrame();
 
-		void beginRenderPass(const FrameData& frameData, const RenderTarget& target,
-			const std::vector<vk::ClearValue> clearValues);
+		void beginRendering(const FrameData& frameData, IRenderPass& pass);
 
 		void renderFrame();
 
-		void endRenderPass(const FrameData& frameData);
+		void endRendering(const FrameData& frameData);
 		void endFrame();
 
 		void registerPass(IRenderPass* pass){
@@ -72,6 +71,11 @@ namespace de {
 	private:
 		void recreateSwapchain();
 		void recreatePerImageSyncObjects();
+		void transitionImage(vk::CommandBuffer cmd, vk::Image image,
+        vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
+        vk::PipelineStageFlags srcStage, vk::AccessFlags srcAccess,
+        vk::PipelineStageFlags dstStage, vk::AccessFlags dstAccess,
+        vk::ImageAspectFlags aspect);
 
 		const Device& device_;
 		//const RenderPass& renderPass_;

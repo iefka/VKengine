@@ -16,8 +16,7 @@ namespace de {
 		const PassContext& passContext,
 		const DescriptorPool& descriptorPool,
 		std::string texturePath)
-		:device_{renderContext.device},
-		renderPass_{passContext.renderPass}{
+		:device_{renderContext.device}{
 	
 		sbTexture_ = std::make_unique<Texture>(Texture::loadCubemap(*device_,
 			texturePath));
@@ -43,7 +42,8 @@ namespace de {
     		cubemapLayout_->getLayout()
 		};
 
-		createPipeline(passContext.extent, layouts, renderContext.pipelinesCache);
+		createPipeline(passContext.extent, layouts, renderContext.pipelinesCache,
+		passContext.colorFormat, passContext.depthFormat);
 
 	}
 
@@ -59,8 +59,10 @@ namespace de {
 		frameInfo.commandBuffer.draw(3, 1, 0, 0);
 	}
 
-	void SkyBoxSystem::createPipeline(const vk::Extent2D extent,
-		std::span<const vk::DescriptorSetLayout> descriptorSetLayouts, vk::PipelineCache cache){
+	void SkyBoxSystem::createPipeline(const vk::Extent2D extent, 
+		const std::span<const vk::DescriptorSetLayout> descriptorSetLayouts,
+	 	const vk::PipelineCache& cache,
+		vk::Format colorFormat, vk::Format depthFormat){
 
 		auto vertexInputState = vk::PipelineVertexInputStateCreateInfo{};
 
@@ -98,7 +100,7 @@ namespace de {
 		auto builder = de::GraphicsBuilder()
 			.addFragmentShader("main", fragmentShader_->getShaderModule())
 			.addVertexShader("main", vertexShader_->getShaderModule())
-			.setRenderPass(*renderPass_->getRenderPass())
+			.setRenderingFormat(colorFormat, depthFormat)
 			.setInputAssemblyState(vk::PrimitiveTopology::eTriangleList)
 			.setViewportState(extent)
 			.setRasterizationState(rasterizationState)

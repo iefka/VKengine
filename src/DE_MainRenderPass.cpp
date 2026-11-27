@@ -63,20 +63,28 @@ namespace de{
 
 	MainRenderPass::~MainRenderPass() = default;
 	
-	std::vector<vk::ClearValue> MainRenderPass::getClearValues() const {
-		return std::vector<vk::ClearValue>{
-			vk::ClearValue{}.setColor(std::array<float, 4>{{0.0f, 0.0f, 0.0f, 1.0f}}),
-			vk::ClearValue{}.setDepthStencil(vk::ClearDepthStencilValue{ 1.0f, 0 }) };
+	ColorAttachment MainRenderPass::colorClearValue()  const {
+		return ColorAttachment{
+			.loadOp = vk::AttachmentLoadOp::eClear,
+			.storeOp = vk::AttachmentStoreOp::eDontCare,
+			.clear = vk::ClearValue{}
+				.setColor(std::array<float, 4>{{0.f, 0.f, 0.f, 1.f}})
+		};
 	}
-	const RenderTarget& MainRenderPass::getRenderTarget() const{
-		return renderer_.getSwapchainRenderTarget();
+	std::optional<DepthAttachment> MainRenderPass::depthClearValue()  const {
+		return DepthAttachment{
+			.loadOp = vk::AttachmentLoadOp::eClear,
+			.storeOp = vk::AttachmentStoreOp::eDontCare,
+			.clear = vk::ClearValue{}
+				.setDepthStencil({1.f, 0})
+		};
 	}
 
 	void MainRenderPass::updateTime(float deltaTime, float totalTime){
 		deltaTime_ = deltaTime;
 		totalTime_ = totalTime;
 	}
-
+	
 	void MainRenderPass::record(const FrameData& frameData) {
 
 		auto& currUBO = UBO[frameData.frameIndex];
@@ -106,8 +114,5 @@ currUBO.invViewProjMatrix = glm::inverse(currUBO.projectionMatrix * currUBO.view
 		renderSystem_.renderGameObjects(frameInfo);
 		pointLightSystem_.render(frameInfo);
 	}
-	void MainRenderPass::onSwapchainRecreation(const Swapchain&){
-		//skip, in this pass use swapchainPass
-		return;
-	}
+
 }

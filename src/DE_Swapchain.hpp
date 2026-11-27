@@ -114,6 +114,10 @@ namespace de {
 		vk::Extent2D getSwapchainExtent() const noexcept{ return currentExtent_; }
 		vk::RenderPass getRenderPass()const noexcept{return *renderPass_.getRenderPass();}
 		uint32_t getMinImageCount() const noexcept { return minImage_; }
+		vk::ImageView getColorView(uint32_t index) const noexcept { return *imageViews_[index]; }
+		vk::ImageView getDepthView() const noexcept {return *depthImageView_;}
+		vk::Image getColorImage(uint32_t index) const noexcept { return colorImages_[index]; }
+		vk::Image getDepthImage() const noexcept {return *depthImage_.image;}
 
 	private:
 		friend class Builder;
@@ -127,6 +131,7 @@ namespace de {
 		// per-image real image count
 		uint32_t minImage_;
 		uint32_t imageCount_;
+		std::vector<vk::Image> colorImages_;
 		std::vector<vk::UniqueImageView> imageViews_;
 		vk::UniqueImageView depthImageView_;
 		gpuImage depthImage_;

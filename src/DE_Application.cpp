@@ -340,7 +340,6 @@ void Application::initSystems(){
 
 	passContext_ = {
 		.colorFormat = window_.getSurfaceFormat().format,
-		.depthFormat = vk::Format::eD32Sfloat,
 		.extent = window_.getExtent()
 
 	};

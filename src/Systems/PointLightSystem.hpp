@@ -34,10 +34,11 @@ namespace de {
 		void render(const FrameInfo& frameInfo);
 	private:
 		void createPipeline(const vk::Extent2D extent, 
-			std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts, vk::PipelineCache pipelineCache);
+		const std::span<const vk::DescriptorSetLayout> descriptorSetLayouts,
+	 	const vk::PipelineCache& cache,
+		vk::Format colorFormat, vk::Format depthFormat);
 
 		const Device* device_;
-		const RenderPass* renderPass_;
 
 		inline static constexpr std::array kSlots{ SetSlot::eGlobal};
 

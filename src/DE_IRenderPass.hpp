@@ -1,20 +1,29 @@
 #pragma once
 
-#include"DE_RenderTarget.hpp"
 #include<vulkan/vulkan.hpp>
-#include<vector>
+#include<optional>
 
 namespace de {
 	struct FrameData;
 	class Swapchain;
 
+	struct DepthAttachment{
+		vk::AttachmentLoadOp loadOp = vk::AttachmentLoadOp::eLoad;
+		vk::AttachmentStoreOp storeOp = vk::AttachmentStoreOp::eDontCare;
+		vk::ClearValue clear{};
+	};
+	struct ColorAttachment{
+		vk::AttachmentLoadOp loadOp = vk::AttachmentLoadOp::eLoad;
+		vk::AttachmentStoreOp storeOp = vk::AttachmentStoreOp::eDontCare;
+		vk::ClearValue clear{};
+	};
+
 	class IRenderPass {
 	public:
 		virtual ~IRenderPass() = default;
-		virtual std::vector<vk::ClearValue> getClearValues() const = 0;
-		virtual void preRecord(const FrameData&) {}
+		virtual ColorAttachment colorClearValue() const {return {};}
+		virtual std::optional<DepthAttachment> depthClearValue() const {return std::nullopt;}
 		virtual void record(const FrameData& frameData) = 0;
-		virtual void onSwapchainRecreation(const Swapchain&) {}
-
+		virtual bool useDepth() const {return true;}
 	};
 }

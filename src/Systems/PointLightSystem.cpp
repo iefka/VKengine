@@ -15,8 +15,7 @@ namespace de {
 
 	PointLightSystem::PointLightSystem(const RenderContext& renderContext,
 		const PassContext& passContext) :
-		device_{ renderContext.device },
-		renderPass_{ passContext.renderPass }
+		device_{ renderContext.device }
 	{
 		vertexShader_ = std::make_unique<de::Shader>(*device_, "Shaders/bin/point_light.vert.spv");
 		fragmentShader_ = std::make_unique<de::Shader>(*device_, "Shaders/bin/point_light.frag.spv");
@@ -27,7 +26,8 @@ namespace de {
 		})
 		|std::ranges::to<std::vector>();
 
-		createPipeline(passContext.extent, layouts, renderContext.pipelinesCache);
+		createPipeline(passContext.extent, layouts, renderContext.pipelinesCache,
+		passContext.colorFormat, passContext.depthFormat);
 	}
 
 	void PointLightSystem::update(GameObject::Map& gameObjects, GlobalUBO& ubo, float deltaTime, float){
@@ -72,7 +72,9 @@ namespace de {
 	}
 
 	void PointLightSystem::createPipeline(const vk::Extent2D extent, 
-		std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts, vk::PipelineCache pipelineCache) {
+		const std::span<const vk::DescriptorSetLayout> descriptorSetLayouts,
+	 	const	vk::PipelineCache& cache,
+		vk::Format colorFormat, vk::Format depthFormat) {
 
 		auto vertexInputState = vk::PipelineVertexInputStateCreateInfo{};	
 		
@@ -111,13 +113,13 @@ namespace de {
 		auto builder = de::GraphicsBuilder()
 			.addFragmentShader("main", fragmentShader_->getShaderModule())
 			.addVertexShader("main", vertexShader_->getShaderModule())
-			.setRenderPass(*renderPass_->getRenderPass())
+			.setRenderingFormat(colorFormat, depthFormat)
 			.setInputAssemblyState(vk::PrimitiveTopology::eTriangleList)
 			.setViewportState(extent)
 			.setRasterizationState(rasterizationState)
 			.setMultisampleState(multisampleInfo)
 			.setDynamicStates(dynamicStates)
-			.setPipelineCache(pipelineCache)
+			.setPipelineCache(cache)
 			.setDsLayouts(descriptorSetLayouts)
 			.setVertexInputState(vertexInputState)
 			.setColorBlendState(colorBlendState)

@@ -14,17 +14,7 @@
 
 namespace de {
 
-	vk::Framebuffer GUIRenderTarget::getFramebuffer(uint32_t imageIndex) const{
-		return swapchain_->getFrameBuffer(imageIndex);
-	}
 
-	vk::RenderPass GUIRenderTarget::getRenderPass() const{
-		return guiPass_->getRenderPass();
-	}
-
-	vk::Extent2D GUIRenderTarget::getExtent() const{
-		return swapchain_->getSwapchainExtent();
-	}
 
 	GUIRenderPass::GUIRenderPass(
 		const Instance& instance,
@@ -36,26 +26,6 @@ namespace de {
 
 		ImGui::CreateContext();
 		IMGUI_CHECKVERSION();
-		renderPass_ = std::make_unique<RenderPass>(
-			RenderPass::Builder{ *renderContext.device }
-			.setColorAttachment(
-				window.getSurfaceFormat().format,
-				vk::SampleCountFlagBits::e1,
-				vk::AttachmentLoadOp::eLoad,
-				vk::AttachmentStoreOp::eStore,
-				vk::ImageLayout::ePresentSrcKHR)
-			//time
-			.setDepthAttachment(
-				vk::Format::eD32Sfloat,            
-				vk::SampleCountFlagBits::e1,
-				vk::AttachmentLoadOp::eDontCare,
-				vk::AttachmentStoreOp::eDontCare,
-				vk::ImageLayout::eDepthStencilAttachmentOptimal,
-				vk::ImageLayout::eDepthStencilAttachmentOptimal)
-			.build()
-		);
-
-		renderTarget_.rebind(renderer_.getSwapchain(), *this);
 
 		imguiPool_ = std::make_unique<DescriptorPool>(
 			DescriptorPool::Builder{ *renderContext.device }
@@ -67,7 +37,7 @@ namespace de {
 			.build()
 		);
 
-
+		VkFormat colorFormat = static_cast<VkFormat>(window.getSurfaceFormat().format);
 
 		ImGui_ImplVulkan_InitInfo initInfo{
 			.ApiVersion = vk::makeApiVersion(0,1,4,0),
@@ -82,13 +52,22 @@ namespace de {
 			.ImageCount = renderer_.getSwapchain().getImageCount(),
 			.PipelineCache = renderContext.pipelinesCache,
 			.PipelineInfoMain = {
-				.RenderPass = *renderPass_->getRenderPass(),
+				.RenderPass = nullptr,
 				.Subpass = 0,
 				.MSAASamples = VK_SAMPLE_COUNT_1_BIT,
 				.ExtraDynamicStates = {},
-				.PipelineRenderingCreateInfo = {}
+				.PipelineRenderingCreateInfo = 
+					VkPipelineRenderingCreateInfo{
+						.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+						.pNext = nullptr,
+						.viewMask = 0,
+						.colorAttachmentCount = 1,
+						.pColorAttachmentFormats = &colorFormat,
+						.depthAttachmentFormat = VK_FORMAT_UNDEFINED,
+						.stencilAttachmentFormat = VK_FORMAT_UNDEFINED
+					}
 			},
-			.UseDynamicRendering = false,
+			.UseDynamicRendering = true,
 			.Allocator = nullptr,
 			.CheckVkResultFn = nullptr,
 			.MinAllocationSize = 0,
@@ -108,28 +87,12 @@ namespace de {
 		ImGui::DestroyContext();
 	}
 
-	std::vector<vk::ClearValue> GUIRenderPass::getClearValues() const{
-		
-		//dont clear
-		return {};
-	}
-
-	const RenderTarget& GUIRenderPass::getRenderTarget() const{
-		return renderTarget_;
-	}
-
 	void GUIRenderPass::record(const FrameData& frameData){
 		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), frameData.commandBuffer);
 
 	}
 
-	void GUIRenderPass::onSwapchainRecreation(const Swapchain&){
-		renderTarget_.rebind(renderer_.getSwapchain(), *this);
-	}
 
-	vk::RenderPass GUIRenderPass::getRenderPass() const noexcept
-	{
-		return *renderPass_->getRenderPass();
-	}
+
 
 }

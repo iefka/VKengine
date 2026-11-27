@@ -205,6 +205,7 @@ namespace de{
                 renderingInfo_
                 .setColorAttachmentFormats(color)
                 .setDepthAttachmentFormat(depth);
+                return *this;
             }
 
            const std::vector<vk::PipelineShaderStageCreateInfo>& getStageInfos()const noexcept          {return stageInfos_;}
@@ -214,13 +215,13 @@ namespace de{
            const vk::PipelineRasterizationStateCreateInfo*       getRasterezationInfo()const noexcept   {return &rasterezationInfo_;}
            const vk::PipelineMultisampleStateCreateInfo*         getMultisampleInfo()const noexcept     {return &multisampleInfo_;}
            const vk::PipelineColorBlendStateCreateInfo*          getColorBlendInfo()const noexcept      {return &colorBlendState_;}
-           [[deprecated]]const vk::RenderPass&                                 getRenderPass()const noexcept          {return renderPass_;}
+           [[deprecated]]const vk::RenderPass&                   getRenderPass()const noexcept          {return renderPass_;}
            const std::vector<vk::DescriptorSetLayout>&           getDsLayouts() const noexcept          {return dsLayouts_; }
            const std::vector<vk::PushConstantRange>&             getPushConstantRanges() const noexcept {return pushConstantRanges_; }
            const vk::PipelineDepthStencilStateCreateInfo*        getDepthInfo() const noexcept          {return &detphState_;}
            const vk::PipelineDynamicStateCreateInfo*             getDynamicState() const noexcept       { return &dynamicState; }
            const vk::PipelineCache                               getCache() const noexcept              {return cache_;}
-           const vk::PipelineRenderingCreateInfo&                 getRenderingInfo() const noexcept      {return renderingInfo_;}
+           const vk::PipelineRenderingCreateInfo*               getRenderingInfo() const noexcept       {return &renderingInfo_;}
 
         private:
             std::vector<vk::PipelineShaderStageCreateInfo> stageInfos_;

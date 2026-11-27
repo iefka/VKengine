@@ -3,6 +3,7 @@
 #include"DE_IRenderPass.hpp"
 #include"DE_GameObject.hpp"
 #include<memory>
+#include<optional>
 
 namespace de {
 
@@ -33,10 +34,9 @@ namespace de {
 
 
 		 void updateTime(float deltaTime, float totalTime);
-		 std::vector<vk::ClearValue> getClearValues()  const override;
-		 const RenderTarget& getRenderTarget() const override;
+		 ColorAttachment colorClearValue()  const override;
+		 std::optional<DepthAttachment> depthClearValue()  const override;
 		 void record(const FrameData& frameData) override;
-		 void onSwapchainRecreation(const Swapchain& sc) override;
 
 	private:
 

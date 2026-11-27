@@ -8,6 +8,7 @@
 #include<vector>
 #include<utility>
 #include<array>
+#include<span>
 
 #include"DE_Pipeline.hpp"
 #include"SSBO/DE_TransformData.hpp"
@@ -57,11 +58,12 @@ namespace de {
 
 		void renderGameObjects(const FrameInfo& frameInfo);
 	private:
-		void createPipeline(const vk::Extent2D extent, const std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts,
-			 const vk::PipelineCache& cache);
+		void createPipeline(const vk::Extent2D extent, 
+			const std::span<const vk::DescriptorSetLayout> descriptorSetLayouts,
+			const vk::PipelineCache& cache,
+			vk::Format colorFormat, vk::Format depthFormat);
 		
 		const Device* device_;
-		const RenderPass* renderPass_;
 
 		inline static constexpr std::array kSlots{ SetSlot::eGlobal, SetSlot::eTextures,
         	SetSlot::eMaterialData, SetSlot::eTransforms };

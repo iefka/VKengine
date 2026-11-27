@@ -1,9 +1,10 @@
+#include "DE_Renderer.hpp"
 #include"DE_Device.hpp"
 #include"DE_CommandBuffers.hpp"
 #include"DE_RenderPass.hpp"
 #include"DE_Window.hpp"
 #include<limits>
-#include "DE_Renderer.hpp"
+
 
 namespace de {
 	Renderer::Renderer(const Device& device, 
@@ -39,8 +40,6 @@ namespace de {
 			.build()
 		);
 
-		swapchainTarget_.rebind(*swapchain_);
-
 		commandBuffer_ = std::make_unique<CommandBuffer>(
 			commandPool_.allocate(vk::CommandBufferLevel::ePrimary, framesInFlight_)	
 		);
@@ -75,6 +74,27 @@ namespace de {
 		imagesInFlightFences_.assign(imageCount, vk::Fence{});
 	}
 
+	void Renderer::transitionImage(vk::CommandBuffer cmd, vk::Image image,
+        vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
+        vk::PipelineStageFlags srcStage, vk::AccessFlags srcAccess,
+        vk::PipelineStageFlags dstStage, vk::AccessFlags dstAccess,
+        vk::ImageAspectFlags aspect){
+		const auto barrier = vk::ImageMemoryBarrier{}
+			.setOldLayout(oldLayout)
+			.setNewLayout(newLayout)
+			.setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
+			.setDstQueueFamilyIndex(vk::QueueFamilyIgnored)
+			.setImage(image)
+			.setSrcAccessMask(srcAccess)
+			.setDstAccessMask(dstAccess)
+			.setSubresourceRange(vk::ImageSubresourceRange{}
+				.setAspectMask(aspect)
+				.setBaseMipLevel(0).setLevelCount(1)
+				.setBaseArrayLayer(0).setLayerCount(1));
+
+		cmd.pipelineBarrier(srcStage, dstStage, {}, nullptr, nullptr, barrier);
+	}
+
 	void Renderer::recreateSwapchain() {
 
 		auto extent = window_.getExtent();
@@ -102,7 +122,6 @@ namespace de {
 			.setOldSwapchain(oldHandle)
 			.build()
 		);
-		swapchainTarget_.rebind(*swapchain_);
 
 		recreatePerImageSyncObjects();
 	}
@@ -148,6 +167,20 @@ namespace de {
 		auto commandBuffer = commandBuffer_->handle(currentFrameIndex_);
 		commandBuffer.begin(vk::CommandBufferBeginInfo{});
 
+		transitionImage(commandBuffer, swapchain_->getColorImage(imageIndex),
+			vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
+			vk::PipelineStageFlagBits::eTopOfPipe, {},
+			vk::PipelineStageFlagBits::eColorAttachmentOutput,
+			vk::AccessFlagBits::eColorAttachmentWrite,
+			vk::ImageAspectFlagBits::eColor);
+
+		transitionImage(commandBuffer, swapchain_->getDepthImage(),
+			vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthAttachmentOptimal,
+			vk::PipelineStageFlagBits::eTopOfPipe, {},
+			vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eLateFragmentTests,
+			vk::AccessFlagBits::eDepthStencilAttachmentRead | vk::AccessFlagBits::eDepthStencilAttachmentWrite,
+			vk::ImageAspectFlagBits::eDepth);
+
 		return FrameData{
 			imageIndex,
 			currentFrameIndex_,
@@ -156,22 +189,41 @@ namespace de {
 
 	}
 
-	void Renderer::beginRenderPass(const FrameData& frameData, const RenderTarget& target,
-		const std::vector<vk::ClearValue> clearValues) {
+	void Renderer::beginRendering(const FrameData& frameData, IRenderPass& pass) {
 
 		if (!isFrameStarted_) {
-			throw std::runtime_error("beginRenderPass called outside of a frame");
+			throw std::runtime_error("beginRendering called outside of a frame");
 		}
 
-		const auto beginRenderPassInfo = vk::RenderPassBeginInfo{}
-			.setClearValues(clearValues)
-			.setRenderPass(target.getRenderPass())
-			.setFramebuffer(target.getFramebuffer(frameData.imageIndex))
-			.setRenderArea(vk::Rect2D{ vk::Offset2D{0, 0}, target.getExtent() });
+		const auto extent = swapchain_->getSwapchainExtent();
 
-		frameData.commandBuffer.beginRenderPass(beginRenderPassInfo, vk::SubpassContents::eInline);
+		const auto color = pass.colorClearValue();
+		const auto colorAttInfo = vk::RenderingAttachmentInfo{}
+			.setClearValue(color.clear)
+			.setLoadOp(color.loadOp)
+			.setStoreOp(color.storeOp)
+			.setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
+			.setImageView(swapchain_->getColorView(frameData.imageIndex));
+
+		const auto depth = pass.depthClearValue();
+		auto depthAttInfo = vk::RenderingAttachmentInfo{};
+		if(depth){
+			depthAttInfo
+				.setClearValue(depth->clear)
+				.setLoadOp(depth->loadOp)
+				.setStoreOp(depth->storeOp)
+				.setImageLayout(vk::ImageLayout::eDepthAttachmentOptimal)
+				.setImageView(swapchain_->getDepthView());
+		}
+
+		const auto renderingInfo = vk::RenderingInfo{}
+			.setColorAttachments(colorAttInfo)
+			.setPDepthAttachment(depth? &depthAttInfo : nullptr)
+			.setRenderArea(vk::Rect2D{{0,0},{extent}})
+			.setLayerCount(1);
+
+		frameData.commandBuffer.beginRendering(renderingInfo);
 		
-		const auto extent = target.getExtent();
 		frameData.commandBuffer.setViewport(0, vk::Viewport{}
 			.setX(0.f)
 			.setY(0.f)
@@ -194,20 +246,25 @@ namespace de {
 
 		for (auto& pass : passes_) {
 
-			pass->preRecord(frame);
-			beginRenderPass(frame, pass->getRenderTarget(), pass->getClearValues());
+			beginRendering(frame, *pass);
 			pass->record(frame);
-			endRenderPass(frame);
+			endRendering(frame);
 		}
+
+		transitionImage(frame.commandBuffer, swapchain_->getColorImage(frame.imageIndex),
+			vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
+			vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::AccessFlagBits::eColorAttachmentWrite,
+			vk::PipelineStageFlagBits::eBottomOfPipe, {},
+			vk::ImageAspectFlagBits::eColor);
 
 		endFrame();
 
 	}
-	void Renderer::endRenderPass(const FrameData& frameData) {
+	void Renderer::endRendering(const FrameData& frameData) {
 		if (!isFrameStarted_) {
 			throw std::runtime_error("endRenderPass called outside of a frame");
 		}
-		frameData.commandBuffer.endRenderPass();
+		frameData.commandBuffer.endRendering();
 	}
 
 	void Renderer::endFrame() {

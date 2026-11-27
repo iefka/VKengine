@@ -90,6 +90,7 @@ namespace de {
 		depthImageView_ = utl::createImageView(device_.getLogicalDevice(), *depthImage_.image, vk::Format::eD32Sfloat, vk::ImageAspectFlagBits::eDepth);
 
 		swapchain_ = logicalDevice.createSwapchainKHRUnique(scInfo);
+		colorImages_ = logicalDevice.getSwapchainImagesKHR(*swapchain_);
 		imageViews_ = createImageViews(device_, *swapchain_, scInfo.imageFormat);
 		framebuffers_ = createFramebuffers(device_, imageViews_, depthImageView_, scInfo.imageExtent, *renderPass.getRenderPass());
 

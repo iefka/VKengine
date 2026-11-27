@@ -19,8 +19,7 @@
 namespace de {
 
 	RenderSystem::RenderSystem (const RenderContext& renderContext, const PassContext& passContext) 
-		:device_{renderContext.device},
-		renderPass_{passContext.renderPass}{
+		:device_{renderContext.device}{
 
 		vertexShader_ = std::make_unique<de::Shader>(*device_, "Shaders/bin/vertex.vert.spv");
 		fragmentShader_ = std::make_unique<de::Shader>(*device_, "Shaders/bin/fragment.frag.spv");
@@ -32,7 +31,8 @@ namespace de {
 		})
 		|std::ranges::to<std::vector>();
 
-		createPipeline(passContext.extent, layouts, renderContext.pipelinesCache);
+		createPipeline(passContext.extent, layouts, renderContext.pipelinesCache,
+		passContext.colorFormat, passContext.depthFormat);
 
 	}
 
@@ -110,8 +110,10 @@ namespace de {
 
 	}
 
-	void RenderSystem::createPipeline(const vk::Extent2D extent, const std::vector<vk::DescriptorSetLayout>& descriptorSetLayouts,
-	 const	vk::PipelineCache& cache) {
+	void RenderSystem::createPipeline(const vk::Extent2D extent, 
+		const std::span<const vk::DescriptorSetLayout> descriptorSetLayouts,
+	 	const	vk::PipelineCache& cache,
+		vk::Format colorFormat, vk::Format depthFormat) {
 
 		const auto& vertexAttributes = de::Mesh::Vertex::getAttributes();
 		const auto& bindingDescription = de::Mesh::Vertex::getBindings();
@@ -154,7 +156,7 @@ namespace de {
 		auto builder = de::GraphicsBuilder()
 			.addFragmentShader("main", fragmentShader_->getShaderModule())
 			.addVertexShader("main", vertexShader_->getShaderModule())
-			.setRenderPass(*renderPass_->getRenderPass())
+			.setRenderingFormat(colorFormat, depthFormat)
 			.setInputAssemblyState(vk::PrimitiveTopology::eTriangleList)
 			.setViewportState(extent)
 			.setRasterizationState(rasterizationState)

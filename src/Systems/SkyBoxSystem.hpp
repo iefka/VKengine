@@ -42,10 +42,11 @@ namespace de {
 		void render(const FrameInfo& frameInfo);
 	private:
 		void createPipeline(const vk::Extent2D extent, 
-			std::span<const vk::DescriptorSetLayout> descriptorSetLayouts, vk::PipelineCache cache);
+			const std::span<const vk::DescriptorSetLayout> descriptorSetLayouts,
+	 		const vk::PipelineCache& cache,
+			vk::Format colorFormat, vk::Format depthFormat);
 
 		const Device* device_;
-		const RenderPass* renderPass_;
 
 		enum class SkyBoxSlots  : uint32_t{
 			eGlobal = std::to_underlying(SetSlot::eGlobal),
