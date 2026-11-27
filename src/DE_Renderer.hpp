@@ -11,7 +11,6 @@
 
 namespace de {
 	class Device;
-	class RenderPass;
 	class CommandPool;
 	class CommandBuffer;
 	class Window;
@@ -20,6 +19,8 @@ namespace de {
 		uint32_t imageIndex;
 		uint32_t frameIndex;
 		vk::CommandBuffer commandBuffer;
+		vk::Extent2D extent;
+
 	};
 
 
@@ -60,9 +61,6 @@ namespace de {
 			computeSteps_.erase(removed.begin(), removed.end());
 		}
 
-		const RenderPass& getMainRenderPass() { return *renderPass_; }
-		RenderPass* getMainRenderPassPtr() { return renderPass_.get(); }
-
 		const Swapchain& getSwapchain()const noexcept { return swapchain_.value(); }
 		vk::Extent2D getSwapchainExtent() const noexcept {return swapchain_->getSwapchainExtent();}
 		uint32_t getFramesInFlight() const noexcept { return framesInFlight_; }
@@ -78,7 +76,6 @@ namespace de {
         vk::ImageAspectFlags aspect);
 
 		const Device& device_;
-		//const RenderPass& renderPass_;
 		Window& window_;
 		const CommandPool& commandPool_;
 		std::optional<Swapchain> swapchain_;
@@ -91,7 +88,6 @@ namespace de {
 		bool isFrameStarted_ = false;
 
 		
-		std::unique_ptr<RenderPass> renderPass_;
 		std::vector<IComputeStep*> computeSteps_;
 		std::vector<IRenderPass*> passes_;
 		std::vector<vk::UniqueFence> inFlightFences_;

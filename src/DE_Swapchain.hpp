@@ -44,18 +44,12 @@ namespace de {
 		const vk::SwapchainKHR& swapchain,
 		const vk::Format& format);
 
-	std::vector<vk::UniqueFramebuffer> createFramebuffers(
-		const Device& device,
-		const std::vector<vk::UniqueImageView>& imageViews,
-		const vk::UniqueImageView& depthImageView,
-		const vk::Extent2D& extent,
-		const vk::RenderPass& renderPass);
 
 	class Swapchain {
 	public:
 		class Builder {
 		public:
-			explicit Builder(const Device& device,const RenderPass& renderPass) : device_(device),renderPass_(renderPass) {}
+			explicit Builder(const Device& device) : device_(device) {}
 
 			//set image format and color space by surface format
 			Builder& setImageFormatAndColorSpace(const vk::SurfaceFormatKHR& surfaceFormat);
@@ -85,7 +79,6 @@ namespace de {
 
 		private:
 			const Device& device_;
-			const RenderPass& renderPass_;
 			vk::SwapchainKHR oldSwapchain_;
 			vk::SurfaceKHR surface_;
 			vk::SurfaceFormatKHR surfaceFormat_;
@@ -110,9 +103,7 @@ namespace de {
 
 		uint32_t getImageCount() const noexcept { return static_cast<uint32_t>(imageViews_.size()); }
 		vk::SwapchainKHR getHandle() const noexcept { return *swapchain_; }
-		vk::Framebuffer getFrameBuffer(uint32_t imageIndex) const { return *framebuffers_.at(imageIndex); }
 		vk::Extent2D getSwapchainExtent() const noexcept{ return currentExtent_; }
-		vk::RenderPass getRenderPass()const noexcept{return *renderPass_.getRenderPass();}
 		uint32_t getMinImageCount() const noexcept { return minImage_; }
 		vk::ImageView getColorView(uint32_t index) const noexcept { return *imageViews_[index]; }
 		vk::ImageView getDepthView() const noexcept {return *depthImageView_;}
@@ -121,10 +112,9 @@ namespace de {
 
 	private:
 		friend class Builder;
-		explicit Swapchain(const Device& device,const RenderPass& renderPass,const vk::SwapchainCreateInfoKHR& scInfo);
+		explicit Swapchain(const Device& device,const vk::SwapchainCreateInfoKHR& scInfo);
 
 		const Device& device_;
-		const RenderPass& renderPass_;
 		vk::UniqueSwapchainKHR swapchain_;
 		vk::Extent2D currentExtent_;
 
@@ -135,7 +125,6 @@ namespace de {
 		std::vector<vk::UniqueImageView> imageViews_;
 		vk::UniqueImageView depthImageView_;
 		gpuImage depthImage_;
-		std::vector<vk::UniqueFramebuffer> framebuffers_;
 	};
 
 }

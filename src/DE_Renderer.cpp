@@ -1,7 +1,6 @@
 #include "DE_Renderer.hpp"
 #include"DE_Device.hpp"
 #include"DE_CommandBuffers.hpp"
-#include"DE_RenderPass.hpp"
 #include"DE_Window.hpp"
 #include<limits>
 
@@ -16,16 +15,8 @@ namespace de {
 		minImageCount_{ minImageCount }, 
 		framesInFlight_{framesInFlight} {
 
-
-		renderPass_ = std::make_unique<de::RenderPass>(
-			de::RenderPass::Builder{ device_ }
-			.setColorAttachment(window_.getSurfaceFormat().format)
-			.setDepthAttachment(vk::Format::eD32Sfloat)
-			.build()
-		);
-
 		swapchain_.emplace(
-			Swapchain::Builder{ device_,*renderPass_ }
+			Swapchain::Builder{ device_}
 			.setClipped(true)
 			.setSurface(*window_.getSurface())
 			.setCompositeAlpha(vk::CompositeAlphaFlagBitsKHR::eOpaque)
@@ -107,7 +98,7 @@ namespace de {
 		const auto oldHandle = swapchain_->getHandle();
 
 		swapchain_.emplace(
-			Swapchain::Builder{ device_,*renderPass_ }
+			Swapchain::Builder{ device_ }
 			.setClipped(true)
 			.setSurface(*window_.getSurface())
 			.setCompositeAlpha(vk::CompositeAlphaFlagBitsKHR::eOpaque)
@@ -169,7 +160,7 @@ namespace de {
 
 		transitionImage(commandBuffer, swapchain_->getColorImage(imageIndex),
 			vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
-			vk::PipelineStageFlagBits::eTopOfPipe, {},
+			vk::PipelineStageFlagBits::eColorAttachmentOutput, {},
 			vk::PipelineStageFlagBits::eColorAttachmentOutput,
 			vk::AccessFlagBits::eColorAttachmentWrite,
 			vk::ImageAspectFlagBits::eColor);
@@ -184,7 +175,8 @@ namespace de {
 		return FrameData{
 			imageIndex,
 			currentFrameIndex_,
-			commandBuffer
+			commandBuffer,
+			swapchain_->getSwapchainExtent()
 		};
 
 	}
@@ -262,7 +254,7 @@ namespace de {
 	}
 	void Renderer::endRendering(const FrameData& frameData) {
 		if (!isFrameStarted_) {
-			throw std::runtime_error("endRenderPass called outside of a frame");
+			throw std::runtime_error("endRendering called outside of a frame");
 		}
 		frameData.commandBuffer.endRendering();
 	}

@@ -76,12 +76,12 @@ namespace de {
 			.setOldSwapchain(oldSwapchain_)
 			.setClipped(cliped_);
 
-		return Swapchain(device_,renderPass_, createInfo);
+		return Swapchain(device_, createInfo);
 	}
 
 
-	Swapchain::Swapchain(const Device& device, const RenderPass& renderPass, const vk::SwapchainCreateInfoKHR& scInfo)
-		: device_(device), renderPass_(renderPass)	{
+	Swapchain::Swapchain(const Device& device, const vk::SwapchainCreateInfoKHR& scInfo)
+		: device_(device){
 		const auto& logicalDevice = device_.getLogicalDevice();
 
 		currentExtent_ = scInfo.imageExtent;
@@ -92,12 +92,10 @@ namespace de {
 		swapchain_ = logicalDevice.createSwapchainKHRUnique(scInfo);
 		colorImages_ = logicalDevice.getSwapchainImagesKHR(*swapchain_);
 		imageViews_ = createImageViews(device_, *swapchain_, scInfo.imageFormat);
-		framebuffers_ = createFramebuffers(device_, imageViews_, depthImageView_, scInfo.imageExtent, *renderPass.getRenderPass());
 
 		//real images count
 		minImage_ = scInfo.minImageCount;
 		imageCount_ = static_cast<std::uint32_t>(imageViews_.size());
-
 
 	}
 

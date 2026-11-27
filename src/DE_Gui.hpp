@@ -10,9 +10,7 @@ namespace de {
 	struct FrameData;
 	class Renderer;
 	class DescriptorPool;
-	class RenderPass;
 	class Window;
-	class GUIRenderPass;
 	struct RenderContext;
 
 	class GUIRenderPass : public IRenderPass {

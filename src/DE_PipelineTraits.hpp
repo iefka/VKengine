@@ -3,6 +3,7 @@
 #include<vulkan/vulkan.hpp>
 
 #include<span>
+#include<array>
 
 namespace de{
 
@@ -202,8 +203,10 @@ namespace de{
                 return *this;
             }
             Builder& setRenderingFormat(vk::Format color, vk::Format depth){
+
+                colorAttachment_[0] = color;
                 renderingInfo_
-                .setColorAttachmentFormats(color)
+                .setColorAttachmentFormats(colorAttachment_)
                 .setDepthAttachmentFormat(depth);
                 return *this;
             }
@@ -237,6 +240,8 @@ namespace de{
             vk::PipelineDynamicStateCreateInfo       dynamicState{};
             vk::PipelineRenderingCreateInfo          renderingInfo_{};
 
+            //need for setRenderingFormat because value(color) die after scoupe
+            std::array<vk::Format, 1> colorAttachment_;
             vk::Viewport viewport_{};
             vk::Rect2D scissors_{};
             std::vector<vk::DescriptorSetLayout> dsLayouts_;

@@ -14,7 +14,7 @@ namespace de {
 	};
 	struct ColorAttachment{
 		vk::AttachmentLoadOp loadOp = vk::AttachmentLoadOp::eLoad;
-		vk::AttachmentStoreOp storeOp = vk::AttachmentStoreOp::eDontCare;
+		vk::AttachmentStoreOp storeOp = vk::AttachmentStoreOp::eStore;
 		vk::ClearValue clear{};
 	};
 
@@ -24,6 +24,5 @@ namespace de {
 		virtual ColorAttachment colorClearValue() const {return {};}
 		virtual std::optional<DepthAttachment> depthClearValue() const {return std::nullopt;}
 		virtual void record(const FrameData& frameData) = 0;
-		virtual bool useDepth() const {return true;}
 	};
 }

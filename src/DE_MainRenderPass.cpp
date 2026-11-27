@@ -66,7 +66,7 @@ namespace de{
 	ColorAttachment MainRenderPass::colorClearValue()  const {
 		return ColorAttachment{
 			.loadOp = vk::AttachmentLoadOp::eClear,
-			.storeOp = vk::AttachmentStoreOp::eDontCare,
+			.storeOp = vk::AttachmentStoreOp::eStore,
 			.clear = vk::ClearValue{}
 				.setColor(std::array<float, 4>{{0.f, 0.f, 0.f, 1.f}})
 		};
@@ -92,12 +92,12 @@ namespace de{
 
 		pointLightSystem_.update(gameObjects_, currUBO, deltaTime_, totalTime_);
 
-		const auto extent = renderer_.getSwapchainExtent();
+		const auto extent = frameData.extent;
 		const float aspectRatio = static_cast<float>(extent.width) / static_cast<float>(extent.height);
 		currUBO.projectionMatrix = rawCamera.getProjectionMatrix(aspectRatio);
-currUBO.viewMatrix = rawCamera.getViewMatrix();
-currUBO.inverceViewMatrix = glm::inverse(currUBO.viewMatrix);
-currUBO.invViewProjMatrix = glm::inverse(currUBO.projectionMatrix * currUBO.viewMatrix);
+		currUBO.viewMatrix = rawCamera.getViewMatrix();
+		currUBO.inverceViewMatrix = glm::inverse(currUBO.viewMatrix);
+		currUBO.invViewProjMatrix = glm::inverse(currUBO.projectionMatrix * currUBO.viewMatrix);
 
 		uboBuffers_[frameData.frameIndex]->copyToBuffer(&currUBO, sizeof(GlobalUBO), 0);
 		uboBuffers_[frameData.frameIndex]->flush();

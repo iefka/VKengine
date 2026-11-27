@@ -341,7 +341,6 @@ void Application::initSystems(){
 	passContext_ = {
 		.colorFormat = window_.getSurfaceFormat().format,
 		.extent = window_.getExtent()
-
 	};
 
 	renderSystem_ = std::make_unique<de::RenderSystem>(renderContext_, passContext_);
