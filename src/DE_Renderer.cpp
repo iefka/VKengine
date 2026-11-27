@@ -167,7 +167,7 @@ namespace de {
 
 		transitionImage(commandBuffer, swapchain_->getDepthImage(),
 			vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthAttachmentOptimal,
-			vk::PipelineStageFlagBits::eTopOfPipe, {},
+			vk::PipelineStageFlagBits::eColorAttachmentOutput, {},
 			vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eLateFragmentTests,
 			vk::AccessFlagBits::eDepthStencilAttachmentRead | vk::AccessFlagBits::eDepthStencilAttachmentWrite,
 			vk::ImageAspectFlagBits::eDepth);

@@ -99,32 +99,6 @@ namespace de {
 
 	}
 
-	std::vector<vk::UniqueFramebuffer> createFramebuffers(
-		const Device& device,
-		const std::vector<vk::UniqueImageView>& imageViews,
-		const vk::UniqueImageView& depthImageView,
-		const vk::Extent2D& extent,
-		const vk::RenderPass& renderPass) {
-
-		const auto& logicalDevice = device.getLogicalDevice();
-
-		std::vector<vk::UniqueFramebuffer> framebuffers;
-		for (const auto& view : imageViews) {
-			std::array<vk::ImageView, 2> attachments = { *view, *depthImageView };
-
-			const auto framebufferInfo = vk::FramebufferCreateInfo{}
-				.setRenderPass(renderPass)
-				.setAttachments(attachments)
-				.setWidth(extent.width)
-				.setHeight(extent.height)
-				.setLayers(1);
-
-			framebuffers.emplace_back(logicalDevice.createFramebufferUnique(framebufferInfo));
-		}
-
-		return framebuffers;
-	}
-
 	std::vector<gpuImage> createImages(const de::Device& device,
 		uint32_t imageCreationCount,
 		const vk::Format& format,

@@ -5,7 +5,6 @@
 
 namespace de {
 	struct FrameData;
-	class Swapchain;
 
 	struct DepthAttachment{
 		vk::AttachmentLoadOp loadOp = vk::AttachmentLoadOp::eLoad;
