@@ -396,18 +396,31 @@ void Renderer::transitionImage(vk::CommandBuffer cmd, vk::Image image,
 ```cpp
 transitionImage(commandBuffer, swapchain_->getColorImage(imageIndex),
     vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
-    vk::PipelineStageFlagBits::eTopOfPipe, {},
+    vk::PipelineStageFlagBits::eColorAttachmentOutput, {},   // НЕ eTopOfPipe
     vk::PipelineStageFlagBits::eColorAttachmentOutput,
     vk::AccessFlagBits::eColorAttachmentWrite,
     vk::ImageAspectFlagBits::eColor);
 
 transitionImage(commandBuffer, swapchain_->getDepthImage(),
     vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthAttachmentOptimal,
-    vk::PipelineStageFlagBits::eTopOfPipe, {},
+    vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eLateFragmentTests, {},
     vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eLateFragmentTests,
     vk::AccessFlagBits::eDepthStencilAttachmentRead | vk::AccessFlagBits::eDepthStencilAttachmentWrite,
     vk::ImageAspectFlagBits::eDepth);
 ```
+
+**`srcStage` = `eColorAttachmentOutput`, а не `eTopOfPipe`.** `endFrame` подписывается на
+`readyForRenderengSemaphores_` с `waitStages = eColorAttachmentOutput`: семафор упорядочивает
+только команды этого этапа. Барьер с `srcStage = TopOfPipe` ничего не ждёт, поэтому переход
+layout'а (а это запись в образ) может выполниться **до** того, как acquire завершится и
+presentation engine отпустит образ: на десктопе это чаще всего прощается, на ноутбучных iGPU и
+тайловых — мусор в первых кадрах и мерцание. Ровно поэтому в render pass это работало само:
+неявный переход по `initialLayout` драйвер делал внутри `vkCmdBeginRenderPass`, то есть на
+`COLOR_ATTACHMENT_OUTPUT`. С dynamic rendering этот переход наш, и его надо ставить на тот же
+этап, что и ожидание.
+
+С глубиной эта же логика, но по другой причине: образ глубины общий на все кадры in flight
+(§8), поэтому `srcStage` должен совпадать с этапом её записей — `early`/`late fragment tests`.
 
 `oldLayout = eUndefined` каждый кадр — законно: `Undefined` означает «предыдущее содержимое
 не нужно», поэтому учёт состояния между кадрами не требуется. Ровно так же работал render pass
@@ -768,6 +781,8 @@ struct FrameData {
 | imgui рисует пустоту или падает на первом кадре | `PipelineInfoMain.RenderPass` не `nullptr` либо вызван без активного rendering | `DE_Gui.cpp:84–91` |
 | GUI невидим, картинка сцены цела, ошибок нет | `PipelineRenderingCreateInfo.sType == 0` → backend не создал main-пайплайн (`imgui_impl_vulkan.cpp:1238`), пайплайн так и остался `VK_NULL_HANDLE` | `DE_Gui.cpp:84–91` |
 | Валидация на первом draw GUI: «depth attachment has wrong format / not present» | пары разъехались: `depthAttachmentFormat` в пайплайне против `pDepthAttachment` в `beginRendering` (§3.7) | `DE_Gui.cpp:84–91` ↔ `Renderer::beginRendering` |
+| Мусор/чёрный экран, который зависит от GPU и «иногда проходит» | `storeOp = eDontCare` у цвета в последнем проходе: содержимое образа объявлено неопределённым, а present его читает | `MainRenderPass::colorAttachment`, `ColorAttachment` по умолчанию |
+| Мерцание, артефакты в первых кадрах после ресайза | переход цвета с `srcStage = eTopOfPipe` не упорядочен с acquire-семафором (`waitStages = eColorAttachmentOutput`) | `beginFrame`, §3.5 |
 
 ---
 
@@ -811,6 +826,8 @@ struct FrameData {
 - A откатывается независимо (5 строк).
 - B откатывается одним `git revert`, потому что атомарный.
 - C и D откатываются независимо и не влияют на поведение.
-- Если после B картинки нет, а валидация молчит: первым делом проверить (1) финальный переход
-  в `PresentSrcKHR`, (2) `setViewport`/`setScissor`, (3) `loadOp` у GUI. Эти три покрывают
-  девять из десяти «чёрных экранов» при переходе.
+- Если после B картинки нет, а валидация молчит: первым делом проверить (1) `storeOp = eStore`
+  у цвета в **последнем** проходе, (2) финальный переход в `PresentSrcKHR`, (3)
+  `setViewport`/`setScissor`, (4) `loadOp`/`pDepthAttachment` у GUI. Эти четыре покрывают
+  девять из десяти «чёрных экранов» при переходе; `storeOp = eDontCare` — первый по частоте,
+  потому что на дискретных GPU он «работает», а на iGPU и тайловых даёт мусор.
